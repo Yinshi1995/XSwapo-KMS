@@ -191,7 +191,7 @@ xswapo-rpc-service/
 ### Установка
 
 ```bash
-git clone <repo-url> && cd xswapo-rpc-service
+git clone https://github.com/Yinshi1995/XSwapo-KMS.git && cd xswapo-rpc-service
 bun install
 ```
 
