@@ -348,11 +348,17 @@ curl "http://localhost:3001/trpc/rate.getCryptoRate?input={\"symbol\":\"BTC\",\"
 ### `rate.getCryptoRatio`
 
 Возвращает соотношение двух криптовалют через USD как промежуточную базу.
+Опционально принимает `amount` — количество `from`-валюты для расчёта `estimatedReceive`.
 
 ```bash
 # ETH / BTC
 curl "http://localhost:3001/trpc/rate.getCryptoRatio?input={\"from\":\"ETH\",\"to\":\"BTC\"}"
+
+# Сколько BTC получу за 2.5 ETH
+curl "http://localhost:3001/trpc/rate.getCryptoRatio?input={\"from\":\"ETH\",\"to\":\"BTC\",\"amount\":2.5}"
 ```
+
+Без `amount`:
 
 ```json
 {
@@ -363,6 +369,25 @@ curl "http://localhost:3001/trpc/rate.getCryptoRatio?input={\"from\":\"ETH\",\"t
       "ratio": 0.03142857,
       "fromPriceUsd": 3412.55,
       "toPriceUsd": 108600.00,
+      "timestamp": "2026-04-05T14:32:00.000Z"
+    }
+  }
+}
+```
+
+С `amount`:
+
+```json
+{
+  "result": {
+    "data": {
+      "from": "ETH",
+      "to": "BTC",
+      "ratio": 0.03142857,
+      "fromPriceUsd": 3412.55,
+      "toPriceUsd": 108600.00,
+      "amount": 2.5,
+      "estimatedReceive": 0.07857143,
       "timestamp": "2026-04-05T14:32:00.000Z"
     }
   }

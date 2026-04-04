@@ -4,7 +4,7 @@
 
 import { z } from "zod"
 import { router, publicProcedure } from "../init"
-import { fetchSingleRate, fetchBatchRates } from "../lib/tatumClient"
+import { fetchSingleRate } from "../lib/tatumClient"
 
 export const rateRouter = router({
   getCryptoRate: publicProcedure
@@ -35,21 +35,26 @@ export const rateRouter = router({
       z.object({
         from: z.string().min(1).max(10).transform((s) => s.toUpperCase()),
         to: z.string().min(1).max(10).transform((s) => s.toUpperCase()),
+        amount: z.number({ coerce: true }).positive().optional(),
       }),
     )
     .query(async ({ input }) => {
-      const [fromRate, toRate] = await fetchBatchRates([
-        { currency: input.from, basePair: "USD" },
-        { currency: input.to, basePair: "USD" },
+      const [fromRate, toRate] = await Promise.all([
+        fetchSingleRate(input.from, "USD"),
+        fetchSingleRate(input.to, "USD"),
       ])
       const fromPrice = parseFloat(fromRate.value)
       const toPrice = parseFloat(toRate.value)
+      const ratio = parseFloat((fromPrice / toPrice).toFixed(8))
+      const amount = input.amount ?? 1
       return {
         from: input.from,
         to: input.to,
-        ratio: parseFloat((fromPrice / toPrice).toFixed(8)),
+        ratio,
         fromPriceUsd: fromPrice,
         toPriceUsd: toPrice,
+        amount,
+        estimatedReceive: parseFloat((amount * ratio).toFixed(8)),
         timestamp: new Date().toISOString(),
       }
     }),
