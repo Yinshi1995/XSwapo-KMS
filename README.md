@@ -237,6 +237,8 @@ bun run dev            # development (watch mode)
 | `POST` | `/trpc/send.native` | Отправить нативную монету |
 | `POST` | `/trpc/send.token` | Отправить токен |
 | `GET` | `/trpc/tx.status` | Статус транзакции |
+| `GET` | `/trpc/rate.getCryptoRate` | Курс криптовалюты к фиату или другой крипте |
+| `GET` | `/trpc/rate.getCryptoRatio` | Соотношение двух криптовалют через USD |
 | `GET` | `/health` | Health check |
 
 ---
@@ -307,6 +309,61 @@ curl -X POST http://localhost:3001/trpc/send.native \
   "result": {
     "data": {
       "txId": "0x123abc..."
+    }
+  }
+}
+```
+
+---
+
+### `rate.getCryptoRate`
+
+Возвращает актуальный курс криптовалюты. По умолчанию базовая пара — USD.
+Данные агрегируются из 10+ CEX и 100+ DEX через Tatum Price API.
+
+```bash
+# ETH → USD
+curl "http://localhost:3001/trpc/rate.getCryptoRate?input={\"symbol\":\"ETH\"}"
+
+# BTC → EUR
+curl "http://localhost:3001/trpc/rate.getCryptoRate?input={\"symbol\":\"BTC\",\"basePair\":\"EUR\"}"
+```
+
+```json
+{
+  "result": {
+    "data": {
+      "symbol": "ETH",
+      "basePair": "USD",
+      "value": 3412.55,
+      "source": "CoinGecko",
+      "timestamp": "2026-04-05T14:32:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+### `rate.getCryptoRatio`
+
+Возвращает соотношение двух криптовалют через USD как промежуточную базу.
+
+```bash
+# ETH / BTC
+curl "http://localhost:3001/trpc/rate.getCryptoRatio?input={\"from\":\"ETH\",\"to\":\"BTC\"}"
+```
+
+```json
+{
+  "result": {
+    "data": {
+      "from": "ETH",
+      "to": "BTC",
+      "ratio": 0.03142857,
+      "fromPriceUsd": 3412.55,
+      "toPriceUsd": 108600.00,
+      "timestamp": "2026-04-05T14:32:00.000Z"
     }
   }
 }
