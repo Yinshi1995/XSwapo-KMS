@@ -143,25 +143,25 @@ describe("btcDerivePrivateKey", () => {
 // UTXO chains: Litecoin
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe("utxoGenerateWallet (litecoin-mainnet)", () => {
+describe("utxoGenerateWallet (litecoin)", () => {
   it("generates 24-word mnemonic and xpub", () => {
-    const w = utxoGenerateWallet("litecoin-mainnet")
+    const w = utxoGenerateWallet("litecoin")
     expect(w.mnemonic.split(" ").length).toBe(24)
     expect(w.xpub.length).toBeGreaterThan(50)
   })
 })
 
-describe("utxoDeriveAddress (litecoin-mainnet)", () => {
-  const { xpub } = utxoGenerateWallet("litecoin-mainnet")
+describe("utxoDeriveAddress (litecoin)", () => {
+  const { xpub } = utxoGenerateWallet("litecoin")
 
   it("returns ltc1 bech32 address", () => {
-    const { address } = utxoDeriveAddress(xpub, 0, "litecoin-mainnet")
+    const { address } = utxoDeriveAddress(xpub, 0, "litecoin")
     expect(address.startsWith("ltc1")).toBe(true)
   })
 
   it("different indices produce different addresses", () => {
-    const a0 = utxoDeriveAddress(xpub, 0, "litecoin-mainnet").address
-    const a1 = utxoDeriveAddress(xpub, 1, "litecoin-mainnet").address
+    const a0 = utxoDeriveAddress(xpub, 0, "litecoin").address
+    const a1 = utxoDeriveAddress(xpub, 1, "litecoin").address
     expect(a0).not.toBe(a1)
   })
 })
@@ -170,19 +170,19 @@ describe("utxoDeriveAddress (litecoin-mainnet)", () => {
 // UTXO chains: Dogecoin
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe("utxoGenerateWallet (dogecoin-mainnet)", () => {
+describe("utxoGenerateWallet (dogecoin)", () => {
   it("generates 24-word mnemonic and xpub", () => {
-    const w = utxoGenerateWallet("dogecoin-mainnet")
+    const w = utxoGenerateWallet("dogecoin")
     expect(w.mnemonic.split(" ").length).toBe(24)
     expect(w.xpub.length).toBeGreaterThan(50)
   })
 })
 
-describe("utxoDeriveAddress (dogecoin-mainnet)", () => {
-  const { xpub } = utxoGenerateWallet("dogecoin-mainnet")
+describe("utxoDeriveAddress (dogecoin)", () => {
+  const { xpub } = utxoGenerateWallet("dogecoin")
 
   it("returns address starting with 'D' (P2PKH)", () => {
-    const { address } = utxoDeriveAddress(xpub, 0, "dogecoin-mainnet")
+    const { address } = utxoDeriveAddress(xpub, 0, "dogecoin")
     expect(address.startsWith("D")).toBe(true)
   })
 })
@@ -191,18 +191,18 @@ describe("utxoDeriveAddress (dogecoin-mainnet)", () => {
 // UTXO chains: Bitcoin Cash
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe("utxoGenerateWallet (bitcoincash-mainnet)", () => {
+describe("utxoGenerateWallet (bitcoincash)", () => {
   it("generates 24-word mnemonic and xpub", () => {
-    const w = utxoGenerateWallet("bitcoincash-mainnet")
+    const w = utxoGenerateWallet("bitcoincash")
     expect(w.mnemonic.split(" ").length).toBe(24)
   })
 })
 
-describe("utxoDeriveAddress (bitcoincash-mainnet)", () => {
-  const { xpub } = utxoGenerateWallet("bitcoincash-mainnet")
+describe("utxoDeriveAddress (bitcoincash)", () => {
+  const { xpub } = utxoGenerateWallet("bitcoincash")
 
   it("returns a P2PKH address (starts with '1')", () => {
-    const { address } = utxoDeriveAddress(xpub, 0, "bitcoincash-mainnet")
+    const { address } = utxoDeriveAddress(xpub, 0, "bitcoincash")
     // BCH uses same network params as BTC mainnet → P2PKH starts with '1'
     expect(address.startsWith("1")).toBe(true)
   })

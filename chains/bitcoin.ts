@@ -320,7 +320,7 @@ export async function btcSendTransaction(params: {
     psbt.addInput({
       hash: utxo.txHash,
       index: utxo.index,
-      witnessUtxo: { script: prevOut.script, value: utxo.valueSats },
+      witnessUtxo: { script: prevOut.script, value: BigInt(utxo.valueSats) },
     })
     inputTotal += utxo.valueSats
     if (inputTotal >= amountSats) break
@@ -334,9 +334,9 @@ export async function btcSendTransaction(params: {
   if (changeSats < 0) throw new Error(`Insufficient balance. Need ${amountSats + feeSats} sats, have ${inputTotal}`)
 
   // 6. Добавляем outputs
-  psbt.addOutput({ address: toAddress, value: amountSats })
+  psbt.addOutput({ address: toAddress, value: BigInt(amountSats) })
   if (changeSats > 546) { // dust limit
-    psbt.addOutput({ address: changeAddress ?? fromAddress, value: changeSats })
+    psbt.addOutput({ address: changeAddress ?? fromAddress, value: BigInt(changeSats) })
   }
 
   // 7. Подписываем
@@ -554,7 +554,7 @@ export async function utxoSendTransaction(params: {
       psbt.addInput({
         hash: utxo.txHash,
         index: utxo.index,
-        witnessUtxo: { script: prevOut.script, value: utxo.valueSats },
+        witnessUtxo: { script: prevOut.script, value: BigInt(utxo.valueSats) },
       })
     } else {
       // Legacy: use nonWitnessUtxo
@@ -575,9 +575,9 @@ export async function utxoSendTransaction(params: {
 
   if (changeSats < 0) throw new Error(`Insufficient balance. Need ${amountSats + feeSats} sats, have ${inputTotal}`)
 
-  psbt.addOutput({ address: toAddress, value: amountSats })
+  psbt.addOutput({ address: toAddress, value: BigInt(amountSats) })
   if (changeSats > 546) {
-    psbt.addOutput({ address: changeAddress ?? fromAddress, value: changeSats })
+    psbt.addOutput({ address: changeAddress ?? fromAddress, value: BigInt(changeSats) })
   }
 
   const keyPair = {

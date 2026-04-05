@@ -52,7 +52,7 @@ describe("requireFields", () => {
   })
 
   it("passes valid fields through", () => {
-    const body = { chain: "ethereum-mainnet", index: 0 }
+    const body = { chain: "ethereum", index: 0 }
     expect(requireFields(body, ["chain", "index"])).toBe(body)
   })
 
@@ -78,10 +78,10 @@ describe("input validation via tRPC", () => {
   })
 
   it('index as string "0" should be accepted (coerced to number)', async () => {
-    const genRes = await handle(trpcMutation("wallet.generate", { chain: "ethereum-mainnet" }))
+    const genRes = await handle(trpcMutation("wallet.generate", { chain: "ethereum" }))
     const { xpub } = await trpcData(genRes)
 
-    const res = await handle(trpcQuery("wallet.deriveAddress", { xpub, index: "0", chain: "ethereum-mainnet" }))
+    const res = await handle(trpcQuery("wallet.deriveAddress", { xpub, index: "0", chain: "ethereum" }))
     expect(res.status).toBe(200)
     const data = await trpcData(res)
     expect(data.address).toBeDefined()
@@ -94,11 +94,11 @@ describe("input validation via tRPC", () => {
 
 describe("error handling", () => {
   it("deriveAddress with invalid xpub throws", () => {
-    expect(() => deriveAddress("not-a-valid-xpub", 0, "ethereum-mainnet")).toThrow()
+    expect(() => deriveAddress("not-a-valid-xpub", 0, "ethereum")).toThrow()
   })
 
   it("derivePrivateKey with invalid mnemonic throws", () => {
-    expect(() => derivePrivateKey("invalid mnemonic words here", 0, "ethereum-mainnet")).toThrow()
+    expect(() => derivePrivateKey("invalid mnemonic words here", 0, "ethereum")).toThrow()
   })
 
   it("generateWallet with unknown chain falls through to EVM (no throw)", () => {

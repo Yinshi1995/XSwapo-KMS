@@ -54,7 +54,7 @@ async function tronGet<T>(path: string, network: "mainnet" | "testnet" = "mainne
   return res.json() as Promise<T>
 }
 
-function getTronWebInstance(privateKey: string, network: "mainnet" | "testnet" = "mainnet"): TronWeb {
+function getTronWebInstance(privateKey: string, network: "mainnet" | "testnet" = "mainnet"): typeof TronWeb {
   return new TronWeb({
     fullHost: getRpcUrl(network),
     headers: { "x-api-key": TATUM_API_KEY },

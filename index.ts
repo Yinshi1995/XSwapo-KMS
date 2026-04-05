@@ -82,8 +82,19 @@ export function isTestnet(chain: string): boolean {
     lower.includes("amoy") || lower.includes("devnet")
 }
 
+/** Auto-append "-mainnet" when the chain has no network suffix */
+export function normalizeChain(chain: string): string {
+  const lower = chain.toLowerCase()
+  if (
+    lower.includes("mainnet") || lower.includes("testnet") ||
+    lower.includes("sepolia") || lower.includes("amoy") || lower.includes("devnet")
+  ) return chain
+  return `${chain}-mainnet`
+}
+
 // ─── 1. Генерация кошелька ───────────────────────────────────────────────────
 export function generateWallet(chain: string): ChainWallet {
+  chain = normalizeChain(chain)
   switch (getFamily(chain)) {
     case "bitcoin":     return btc.btcGenerateWallet(isTestnet(chain))
     case "litecoin":
@@ -110,6 +121,7 @@ export function generateWallet(chain: string): ChainWallet {
 // ─── 2. Деривация адреса из xpub ────────────────────────────────────────────
 // Для Ed25519 цепей (Sol/XRP/XLM/ALGO/NEAR/DOT/ADA/XTZ/EGLD/SUI/TON) xpub = мнемоник
 export function deriveAddress(xpubOrMnemonic: string, index: number, chain: string): DerivedAddress | Promise<DerivedAddress> {
+  chain = normalizeChain(chain)
   switch (getFamily(chain)) {
     case "bitcoin":     return btc.btcDeriveAddress(xpubOrMnemonic, index, isTestnet(chain))
     case "litecoin":
@@ -135,6 +147,7 @@ export function deriveAddress(xpubOrMnemonic: string, index: number, chain: stri
 
 // ─── 3. Деривация приватного ключа ──────────────────────────────────────────
 export function derivePrivateKey(mnemonic: string, index: number, chain: string): string {
+  chain = normalizeChain(chain)
   switch (getFamily(chain)) {
     case "bitcoin":     return btc.btcDerivePrivateKey(mnemonic, index, isTestnet(chain))
     case "litecoin":
@@ -160,6 +173,7 @@ export function derivePrivateKey(mnemonic: string, index: number, chain: string)
 
 // ─── 4. Баланс (native) ──────────────────────────────────────────────────────
 export async function getBalance(address: string, chain: string): Promise<Balance> {
+  chain = normalizeChain(chain)
   switch (getFamily(chain)) {
     case "bitcoin":     return btc.btcGetBalance(address, isTestnet(chain))
     case "litecoin":
@@ -189,6 +203,7 @@ export async function getTokenBalance(
   contractAddress: string,
   chain: string
 ): Promise<Balance> {
+  chain = normalizeChain(chain)
   const family = getFamily(chain)
   switch (family) {
     case "tron":   return tron.tronGetTrc20Balance(address, contractAddress, isTestnet(chain) ? "testnet" : "mainnet")
@@ -225,7 +240,8 @@ export async function estimateFee(params: {
   contractAddress?: string   // для token transfers
   data?: string
 }): Promise<GasEstimate | Record<string, unknown>> {
-  const { chain, from, to, amount, contractAddress, data } = params
+  const { chain: rawChain, from, to, amount, contractAddress, data } = params
+  const chain = normalizeChain(rawChain)
 
   switch (getFamily(chain)) {
     case "bitcoin":
@@ -283,7 +299,8 @@ export async function sendNative(params: {
   to: string
   amount: string
 }): Promise<TxResult> {
-  const { chain, privateKey, mnemonic, fromIndex = 0, to, amount } = params
+  const { chain: rawChain, privateKey, mnemonic, fromIndex = 0, to, amount } = params
+  const chain = normalizeChain(rawChain)
 
   switch (getFamily(chain)) {
     case "bitcoin":
@@ -380,7 +397,8 @@ export async function sendToken(params: {
   amount: string
   decimals?: number
 }): Promise<TxResult> {
-  const { chain, privateKey, mnemonic, fromIndex = 0, to, contractAddress, amount, decimals } = params
+  const { chain: rawChain, privateKey, mnemonic, fromIndex = 0, to, contractAddress, amount, decimals } = params
+  const chain = normalizeChain(rawChain)
   const family = getFamily(chain)
 
   switch (family) {
@@ -414,6 +432,7 @@ export async function sendToken(params: {
 
 // ─── 9. Статус транзакции ────────────────────────────────────────────────────
 export async function getTxStatus(txId: string, chain: string) {
+  chain = normalizeChain(chain)
   switch (getFamily(chain)) {
     case "bitcoin":     return btc.btcGetTxStatus(txId, isTestnet(chain))
     case "litecoin":

@@ -67,8 +67,8 @@ describe("GET /health", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("wallet.generate", () => {
-  it("ethereum-mainnet → 200 with mnemonic and xpub", async () => {
-    const res = await handle(trpcMutation("wallet.generate", { chain: "ethereum-mainnet" }))
+  it("ethereum → 200 with mnemonic and xpub", async () => {
+    const res = await handle(trpcMutation("wallet.generate", { chain: "ethereum" }))
     expect(res.status).toBe(200)
     const data = await trpcData(res)
     expect(typeof data.mnemonic).toBe("string")
@@ -77,8 +77,8 @@ describe("wallet.generate", () => {
     expect(data.xpub.length).toBeGreaterThan(0)
   })
 
-  it("bitcoin-mainnet → 200 with mnemonic and xpub", async () => {
-    const res = await handle(trpcMutation("wallet.generate", { chain: "bitcoin-mainnet" }))
+  it("bitcoin → 200 with mnemonic and xpub", async () => {
+    const res = await handle(trpcMutation("wallet.generate", { chain: "bitcoin" }))
     expect(res.status).toBe(200)
     const data = await trpcData(res)
     expect(typeof data.mnemonic).toBe("string")
@@ -101,29 +101,29 @@ describe("wallet.generate", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("wallet.deriveAddress", () => {
-  it("valid xpub + index 0 + ethereum-mainnet → 200 with 0x address", async () => {
+  it("valid xpub + index 0 + ethereum → 200 with 0x address", async () => {
     // First generate a wallet to get a valid xpub
-    const genRes = await handle(trpcMutation("wallet.generate", { chain: "ethereum-mainnet" }))
+    const genRes = await handle(trpcMutation("wallet.generate", { chain: "ethereum" }))
     const { xpub } = await trpcData(genRes)
 
-    const res = await handle(trpcQuery("wallet.deriveAddress", { xpub, index: 0, chain: "ethereum-mainnet" }))
+    const res = await handle(trpcQuery("wallet.deriveAddress", { xpub, index: 0, chain: "ethereum" }))
     expect(res.status).toBe(200)
     const data = await trpcData(res)
     expect(data.address.startsWith("0x")).toBe(true)
   })
 
-  it("valid xpub + index 0 + tron-mainnet → 200 with T address", async () => {
-    const genRes = await handle(trpcMutation("wallet.generate", { chain: "tron-mainnet" }))
+  it("valid xpub + index 0 + tron → 200 with T address", async () => {
+    const genRes = await handle(trpcMutation("wallet.generate", { chain: "tron" }))
     const { xpub } = await trpcData(genRes)
 
-    const res = await handle(trpcQuery("wallet.deriveAddress", { xpub, index: 0, chain: "tron-mainnet" }))
+    const res = await handle(trpcQuery("wallet.deriveAddress", { xpub, index: 0, chain: "tron" }))
     expect(res.status).toBe(200)
     const data = await trpcData(res)
     expect(data.address.startsWith("T")).toBe(true)
   })
 
   it("missing xpub → error", async () => {
-    const res = await handle(trpcQuery("wallet.deriveAddress", { index: 0, chain: "ethereum-mainnet" }))
+    const res = await handle(trpcQuery("wallet.deriveAddress", { index: 0, chain: "ethereum" }))
     expect(res.status).not.toBe(200)
   })
 })
@@ -150,7 +150,7 @@ describe("balance.native (mocked)", () => {
 
     const res = await handle(trpcQuery("balance.native", {
       address: "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD58",
-      chain: "ethereum-mainnet",
+      chain: "ethereum",
     }))
     expect(res.status).toBe(200)
     const data = await trpcData(res)
@@ -185,7 +185,7 @@ describe("tx.status (mocked)", () => {
 
     const res = await handle(trpcQuery("tx.status", {
       txId: "0xabc123",
-      chain: "ethereum-mainnet",
+      chain: "ethereum",
     }))
     expect(res.status).toBe(200)
     const data = await trpcData(res)
@@ -203,7 +203,7 @@ describe("tx.status (mocked)", () => {
 
     const res = await handle(trpcQuery("tx.status", {
       txId: "0xdef456",
-      chain: "ethereum-mainnet",
+      chain: "ethereum",
     }))
     expect(res.status).toBe(200)
     const data = await trpcData(res)
