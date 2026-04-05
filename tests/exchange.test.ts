@@ -18,6 +18,10 @@ async function handle(req: Request): Promise<Response> {
   })
 }
 
+// Pre-generated test wallets (valid xpubs for mock data)
+let testBtcWallet: { mnemonic: string; xpub: string }
+let testEvmWallet: { mnemonic: string; xpub: string }
+
 // Suppress console.error from catch blocks during tests
 const _origConsoleError = console.error
 beforeAll(() => {
@@ -26,6 +30,8 @@ beforeAll(() => {
   process.env.SALT_ROUNDS = "4"
   process.env.TATUM_API_KEY = "test-key"
   process.env.TATUM_WEBHOOK_URL = "https://webhook.example.com/tatum"
+  testBtcWallet = generateWallet("BTC")
+  testEvmWallet = generateWallet("ETH")
 })
 afterAll(() => {
   console.error = _origConsoleError
@@ -130,6 +136,7 @@ describe("exchange.createRequest — input validation", () => {
 // the handle() that uses the real appRouter, and mock at the boundary.
 
 import db from "../db/index"
+import { generateWallet } from "../index"
 
 describe("exchange.createRequest — Step 0: same coin+network rejection", () => {
   it("rejects when source == destination", async () => {
@@ -228,11 +235,11 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
 
     // ── Mock MasterWallet (Step 3) — not found first time ─────────
     db.masterWallet.findUnique = mock(async () => null) as any
-    db.masterWallet.create = mock(async () => ({
-      xpub: "xpub-test-123",
-      coinId: "coin-btc",
-      networkId: "net-btc",
-      surprise: "encrypted-mnemonic",
+    db.masterWallet.create = mock(async (args: any) => ({
+      xpub: args.data.xpub,
+      coinId: args.data.coinId,
+      networkId: args.data.networkId,
+      surprise: args.data.surprise,
       status: "ACTIVE",
       currentIndex: 0,
       generatedAddresses: 0,
@@ -243,11 +250,11 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
       const results = await Promise.all(ops)
       return results
     }) as any
-    db.depositAddress.create = mock(async () => ({
+    db.depositAddress.create = mock(async (args: any) => ({
       id: "deposit-addr-1",
-      address: "bc1q-test-deposit-address",
-      index: 0,
-      masterWalletxpub: "xpub-test-123",
+      address: args.data.address,
+      index: args.data.index,
+      masterWalletxpub: args.data.masterWalletxpub,
     })) as any
     db.masterWallet.update = mock(async () => ({})) as any
 
@@ -297,28 +304,10 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
       tatumSubscriptionId: "tatum-sub-123",
     })) as any
 
-    // ── Mock global fetch (Tatum API calls) ───────────────────────
+    // ── Mock global fetch (Tatum v4 API calls only) ────────────────
+    // Wallet generation & address derivation are now local (no Tatum v3)
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString()
-
-      // Tatum v3 wallet generation
-      if (url.includes("/v3/") && url.includes("/wallet")) {
-        return new Response(
-          JSON.stringify({
-            xpub: "xpub-test-123",
-            mnemonic: "test mnemonic phrase one two three four five six seven eight nine ten eleven twelve",
-          }),
-          { headers: { "Content-Type": "application/json" } },
-        )
-      }
-
-      // Tatum v3 address derivation
-      if (url.includes("/v3/") && url.includes("/address/")) {
-        return new Response(
-          JSON.stringify({ address: "bc1q-test-deposit-address" }),
-          { headers: { "Content-Type": "application/json" } },
-        )
-      }
 
       // Tatum v4 price rate
       if (url.includes("/v4/data/rate/symbol")) {
@@ -382,7 +371,8 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
     expect(data.id).toBe("exreq-1")
     expect(typeof data.orderId).toBe("string")
     expect(data.orderId).toMatch(/^[a-z]+-[a-z]+$/)
-    expect(data.depositAddress.address).toBe("bc1q-test-deposit-address")
+    expect(data.depositAddress.address).toBeTruthy()
+    expect(typeof data.depositAddress.address).toBe("string")
     expect(data.status).toBe("CREATED")
     expect(typeof data.estimatedRate).toBe("number")
     expect(data.estimatedRate).toBe(20) // BTC 60000 / ETH 3000
@@ -434,9 +424,9 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
   })
 
   it("reuses existing master wallet", async () => {
-    // Override: wallet already exists
+    // Override: wallet already exists (use a real xpub so deriveAddress works)
     db.masterWallet.findUnique = mock(async () => ({
-      xpub: "xpub-existing",
+      xpub: testBtcWallet.xpub,
       coinId: "coin-btc",
       networkId: "net-btc",
       surprise: "encrypted",
@@ -446,11 +436,11 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
     })) as any
 
     // Adjust deposit address mock for the existing xpub
-    db.depositAddress.create = mock(async () => ({
+    db.depositAddress.create = mock(async (args: any) => ({
       id: "deposit-addr-2",
-      address: "bc1q-test-deposit-address",
-      index: 3,
-      masterWalletxpub: "xpub-existing",
+      address: args.data.address,
+      index: args.data.index,
+      masterWalletxpub: args.data.masterWalletxpub,
     })) as any
 
     const res = await handle(
@@ -511,7 +501,7 @@ describe("exchange.createRequest — bridge mode", () => {
     }) as any
 
     db.masterWallet.findUnique = mock(async () => ({
-      xpub: "xpub-usdt-eth",
+      xpub: testEvmWallet.xpub,
       coinId: "coin-usdt",
       networkId: "net-eth",
       status: "ACTIVE",
@@ -521,11 +511,11 @@ describe("exchange.createRequest — bridge mode", () => {
     db.masterWallet.create = mock(async () => ({})) as any
     db.masterWallet.update = mock(async () => ({})) as any
     db.$transaction = mock(async (ops: any[]) => Promise.all(ops)) as any
-    db.depositAddress.create = mock(async () => ({
+    db.depositAddress.create = mock(async (args: any) => ({
       id: "dep-usdt-1",
-      address: "0x-usdt-deposit",
-      index: 0,
-      masterWalletxpub: "xpub-usdt-eth",
+      address: args.data.address,
+      index: args.data.index,
+      masterWalletxpub: args.data.masterWalletxpub,
     })) as any
     db.coin.findUniqueOrThrow = mock(async () => ({
       id: "coin-usdt",
@@ -547,13 +537,9 @@ describe("exchange.createRequest — bridge mode", () => {
     })) as any
     db.subscription.create = mock(async () => ({})) as any
 
+    // Only mock Tatum v4 subscription — wallet/address derivation is local now
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString()
-      if (url.includes("/address/")) {
-        return new Response(JSON.stringify({ address: "0x-usdt-deposit" }), {
-          headers: { "Content-Type": "application/json" },
-        })
-      }
       if (url.includes("/v4/subscription")) {
         return new Response(JSON.stringify({ id: "sub-bridge-1" }), {
           headers: { "Content-Type": "application/json" },

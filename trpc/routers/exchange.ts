@@ -18,7 +18,8 @@ import { z } from "zod"
 import { TRPCError } from "@trpc/server"
 import { router, publicProcedure } from "../init"
 import db from "../../db/index"
-import { TATUM_REST_API, TATUM_DATA_API, tatumHeaders } from "../../gateway"
+import { TATUM_DATA_API, tatumHeaders } from "../../gateway"
+import { generateWallet, deriveAddress } from "../../index"
 import { encryptMnemonic } from "../../lib/crypto"
 import { getSpotRate } from "../../lib/spotRate"
 import { generateOrderId } from "../../lib/orderId"
@@ -84,9 +85,8 @@ export const exchangeRouter = router({
 
       const sourceNetwork = sourceMapping.network
 
-      // ── Step 2: Determine Tatum chain codes ───────────────────────────
+      // ── Step 2: Determine chain codes ─────────────────────────────────
       const baseChainCode = sourceMapping.tatumChainCode || sourceNetwork.chain
-      const walletSlug = sourceNetwork.tatumWalletSlug || baseChainCode.toLowerCase()
       const subscriptionChain = sourceNetwork.chain
 
       // ── Step 3: Get or create MasterWallet ────────────────────────────
@@ -95,34 +95,16 @@ export const exchangeRouter = router({
       })
 
       if (!masterWallet) {
-        // Generate via Tatum v3
-        const walletRes = await fetch(`${TATUM_REST_API}/${walletSlug}/wallet`, {
-          method: "GET",
-          headers: tatumHeaders(),
-        })
+        // Generate locally via our chain modules (no Tatum REST dependency)
+        const walletData = generateWallet(baseChainCode)
 
-        if (!walletRes.ok) {
-          const body = await walletRes.text()
-          fail(`Tatum wallet generation failed (${walletRes.status}): ${body}`, "INTERNAL_SERVER_ERROR")
-        }
-
-        const walletData = (await walletRes.json()) as { xpub?: string; mnemonic?: string; address?: string; secret?: string }
-
-        // Some chains (ed25519) return address+secret instead of xpub+mnemonic
-        const xpub = walletData.xpub || walletData.address
-        const mnemonic = walletData.mnemonic || walletData.secret
-
-        if (!xpub || !mnemonic) {
-          fail("Failed to generate master wallet from Tatum: missing xpub/mnemonic", "INTERNAL_SERVER_ERROR")
-        }
-
-        const surprise = encryptMnemonic(mnemonic)
+        const surprise = encryptMnemonic(walletData.mnemonic)
 
         masterWallet = await db.masterWallet.create({
           data: {
             coinId: input.fromCoinId,
             networkId: input.fromNetworkId,
-            xpub,
+            xpub: walletData.xpub,
             surprise,
             status: "ACTIVE",
             currentIndex: 0,
@@ -136,17 +118,7 @@ export const exchangeRouter = router({
         ? masterWallet.currentIndex + 1
         : 0
 
-      const addrRes = await fetch(
-        `${TATUM_REST_API}/${walletSlug}/address/${encodeURIComponent(masterWallet.xpub)}/${nextIndex}`,
-        { method: "GET", headers: tatumHeaders() },
-      )
-
-      if (!addrRes.ok) {
-        const body = await addrRes.text()
-        fail(`Tatum address derivation failed (${addrRes.status}): ${body}`, "INTERNAL_SERVER_ERROR")
-      }
-
-      const addrData = (await addrRes.json()) as { address?: string }
+      const addrData = await deriveAddress(masterWallet.xpub, nextIndex, baseChainCode)
       if (!addrData.address) {
         fail("Failed to derive deposit address from master wallet XPUB", "INTERNAL_SERVER_ERROR")
       }
