@@ -229,6 +229,10 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
         id: "mapping-dst",
         coinId: "coin-eth",
         networkId: "net-eth",
+        network: {
+          id: "net-eth",
+          chain: "ETH",
+        },
         coin: { id: "coin-eth", code: "ETH" },
       }
     }) as any
@@ -304,6 +308,16 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
       tatumSubscriptionId: "tatum-sub-123",
     })) as any
 
+    // ── Mock GasWallet (Step 5a) ──────────────────────────────────
+    db.gasWallet.findFirst = mock(async () => null) as any
+    db.gasWallet.create = mock(async (args: any) => ({
+      id: "gas-wallet-1",
+      networkId: args.data.networkId,
+      address: args.data.address,
+      xpub: args.data.xpub,
+      isPrimary: true,
+    })) as any
+
     // ── Mock global fetch (Tatum v4 API calls only) ────────────────
     // Wallet generation & address derivation are now local (no Tatum v3)
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
@@ -349,6 +363,8 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
     db.exchangeRequest.findUnique = savedMethods.exchangeRequestFindUnique
     db.exchangeRequest.create = savedMethods.exchangeRequestCreate
     db.subscription.create = savedMethods.subscriptionCreate
+    db.gasWallet.findFirst = savedMethods.gasWalletFindFirst
+    db.gasWallet.create = savedMethods.gasWalletCreate
     db.$transaction = savedMethods.$transaction
   })
 
@@ -477,6 +493,8 @@ describe("exchange.createRequest — bridge mode", () => {
     savedMethods.exchangeRequestFindUnique = db.exchangeRequest.findUnique
     savedMethods.exchangeRequestCreate = db.exchangeRequest.create
     savedMethods.subscriptionCreate = db.subscription.create
+    savedMethods.gasWalletFindFirst = db.gasWallet.findFirst
+    savedMethods.gasWalletCreate = db.gasWallet.create
     savedMethods.$transaction = db.$transaction
 
     let callCount = 0
@@ -496,6 +514,7 @@ describe("exchange.createRequest — bridge mode", () => {
         id: "mapping-usdt-tron",
         coinId: "coin-usdt",
         networkId: "net-tron",
+        network: { id: "net-tron", chain: "TRON" },
         coin: { id: "coin-usdt", code: "USDT" },
       }
     }) as any
@@ -537,6 +556,16 @@ describe("exchange.createRequest — bridge mode", () => {
     })) as any
     db.subscription.create = mock(async () => ({})) as any
 
+    // ── Mock GasWallet (Step 5a) ──────────────────────────────────
+    db.gasWallet.findFirst = mock(async () => null) as any
+    db.gasWallet.create = mock(async (args: any) => ({
+      id: "gas-wallet-bridge",
+      networkId: args.data.networkId,
+      address: args.data.address,
+      xpub: args.data.xpub,
+      isPrimary: true,
+    })) as any
+
     // Only mock Tatum v4 subscription — wallet/address derivation is local now
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString()
@@ -564,6 +593,8 @@ describe("exchange.createRequest — bridge mode", () => {
     db.exchangeRequest.findUnique = savedMethods.exchangeRequestFindUnique
     db.exchangeRequest.create = savedMethods.exchangeRequestCreate
     db.subscription.create = savedMethods.subscriptionCreate
+    db.gasWallet.findFirst = savedMethods.gasWalletFindFirst
+    db.gasWallet.create = savedMethods.gasWalletCreate
     db.$transaction = savedMethods.$transaction
   })
 

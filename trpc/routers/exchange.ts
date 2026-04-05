@@ -4,10 +4,11 @@
  * Полный флоу создания заявки на обмен:
  *  0. Валидация входных данных
  *  1. Проверка coin-network маппингов (source deposit + destination withdraw)
- *  2. Определение chain-кодов для Tatum
- *  3. Получение или создание MasterWallet (Tatum v3)
- *  4. Деривация депозитного адреса (Tatum v3)
+ *  2. Определение chain-кодов
+ *  3. Получение или создание MasterWallet (локальная генерация)
+ *  4. Деривация депозитного адреса (локальная)
  *  5. Сохранение DepositAddress + обновление MasterWallet
+ *  5a. Автосоздание GasWallet для source и destination сетей
  *  6. Серверный расчёт курса (Binance)
  *  7. Создание ExchangeRequest
  *  8. Создание Tatum Subscription (webhook)
@@ -43,6 +44,33 @@ function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message })
 }
 
+/** Ensure a GasWallet exists for the given network; create one if missing. */
+async function ensureGasWallet(networkId: string, chainCode: string) {
+  const existing = await db.gasWallet.findFirst({
+    where: { networkId, isPrimary: true },
+  })
+  if (existing) return existing
+
+  const walletData = generateWallet(chainCode)
+  const addrData = await deriveAddress(walletData.xpub, 0, chainCode)
+  const surprise = encryptMnemonic(walletData.mnemonic)
+
+  return db.gasWallet.create({
+    data: {
+      networkId,
+      address: addrData.address,
+      xpub: walletData.xpub,
+      surprise,
+      type: "MASTER",
+      status: "ACTIVE",
+      balance: 0,
+      minBalance: 0,
+      targetBalance: 0,
+      isPrimary: true,
+    },
+  })
+}
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 export const exchangeRouter = router({
@@ -76,7 +104,7 @@ export const exchangeRouter = router({
             coin: { status: "ACTIVE" },
             network: { status: "ACTIVE", isWithdrawEnabled: true },
           },
-          include: { coin: true },
+          include: { coin: true, network: true },
         }),
       ])
 
@@ -84,6 +112,7 @@ export const exchangeRouter = router({
       if (!destMapping) fail("Selected destination coin-network pair is not available for payouts")
 
       const sourceNetwork = sourceMapping.network
+      const destNetwork = destMapping.network
 
       // ── Step 2: Determine chain codes ─────────────────────────────────
       const baseChainCode = sourceMapping.tatumChainCode || sourceNetwork.chain
@@ -139,6 +168,13 @@ export const exchangeRouter = router({
             generatedAddresses: { increment: 1 },
           },
         }),
+      ])
+
+      // ── Step 5a: Ensure GasWallets for source & destination networks ──
+      const destChainCode = destNetwork.chain
+      await Promise.all([
+        ensureGasWallet(sourceNetwork.id, baseChainCode),
+        ensureGasWallet(destNetwork.id, destChainCode),
       ])
 
       // ── Step 6: Server-side rate calculation ──────────────────────────

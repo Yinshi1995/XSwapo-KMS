@@ -1,6 +1,6 @@
-import { encryptMnemonic } from "../../src/app/services/crypto"
+import { encryptMnemonic } from "../../lib/crypto"
+import { generateWallet, deriveAddress } from "../../index"
 import db from "../index"
-import { generateMnemonic } from "bip39"
 
 export async function seedWallets() {
   const mappings = await db.coinNetworkMapping.findMany({
@@ -8,8 +8,10 @@ export async function seedWallets() {
   })
 
   for (const mapping of mappings) {
-    const mnemonic = generateMnemonic(256)
-    const encryptedMnemonic = encryptMnemonic(mnemonic)
+    const chainCode = mapping.tatumChainCode || mapping.network.chain
+    const walletData = generateWallet(chainCode)
+    const addrData = await deriveAddress(walletData.xpub, 0, chainCode)
+    const surprise = encryptMnemonic(walletData.mnemonic)
 
     const masterWallet = await db.masterWallet.upsert({
       where: {
@@ -26,19 +28,14 @@ export async function seedWallets() {
       create: {
         coinId: mapping.coinId,
         networkId: mapping.networkId,
-        xpub: `xpub-dev-${mapping.coin.code}-${mapping.network.code}`,
-        surprise: encryptedMnemonic,
+        xpub: walletData.xpub,
+        surprise,
         status: "ACTIVE",
         currentIndex: 0,
         generatedAddresses: 0,
       },
     })
 
-    const depositAddress = `dep-${mapping.coin.code}-${mapping.network.code}-0`
-
-    // Ensure seeding is idempotent with respect to the real unique constraint
-    // (masterWalletxpub, index). If a row already exists for this wallet/index,
-    // just update its address instead of trying to create a duplicate.
     await db.depositAddress.upsert({
       where: {
         masterWalletxpub_index: {
@@ -47,10 +44,10 @@ export async function seedWallets() {
         },
       },
       update: {
-        address: depositAddress,
+        address: addrData.address,
       },
       create: {
-        address: depositAddress,
+        address: addrData.address,
         index: 0,
         masterWalletxpub: masterWallet.xpub,
       },
@@ -60,30 +57,32 @@ export async function seedWallets() {
   const networks = await db.network.findMany()
 
   for (const network of networks) {
-    const gasMnemonic = generateMnemonic(256)
-    const encryptedGasMnemonic = encryptMnemonic(gasMnemonic)
+    const chainCode = network.chain
+    const walletData = generateWallet(chainCode)
+    const addrData = await deriveAddress(walletData.xpub, 0, chainCode)
+    const surprise = encryptMnemonic(walletData.mnemonic)
 
     await db.gasWallet.upsert({
-      where: { address: `0xgas-${network.code.toLowerCase()}` },
+      where: { address: addrData.address },
       update: {
         networkId: network.id,
-        xpub: `xpub-gas-${network.code.toLowerCase()}`,
+        xpub: walletData.xpub,
         type: "MASTER",
         status: "ACTIVE",
-        minBalance: 0.1,
-        targetBalance: 1,
+        minBalance: 0,
+        targetBalance: 0,
         isPrimary: true,
       },
       create: {
         networkId: network.id,
-        address: `0xgas-${network.code.toLowerCase()}`,
-        xpub: `xpub-gas-${network.code.toLowerCase()}`,
-        surprise: encryptedGasMnemonic,
+        address: addrData.address,
+        xpub: walletData.xpub,
+        surprise,
         type: "MASTER",
         status: "ACTIVE",
         balance: 0,
-        minBalance: 0.1,
-        targetBalance: 1,
+        minBalance: 0,
+        targetBalance: 0,
         isPrimary: true,
       },
     })
