@@ -9,6 +9,7 @@ import { feeRouter } from "./fee"
 import { sendRouter } from "./send"
 import { txRouter } from "./tx"
 import { rateRouter } from "./rate"
+import { exchangeRouter } from "./exchange"
 
 export const appRouter = router({
   wallet: walletRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   send: sendRouter,
   tx: txRouter,
   rate: rateRouter,
+  exchange: exchangeRouter,
 })
 
 export type AppRouter = typeof appRouter

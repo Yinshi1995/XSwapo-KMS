@@ -21,6 +21,7 @@
   - [send.native](#sendnative)
   - [send.token](#sendtoken)
   - [tx.status](#txstatus)
+  - [exchange.createRequest](#exchangecreaterequest)
 - [tRPC Wire Format](#trpc-wire-format)
 - [Chain-Specific Notes](#chain-specific-notes)
 - [Error Handling](#error-handling)
@@ -70,7 +71,8 @@ The server starts on `http://localhost:3001` by default (set `PORT` env var to c
 │    ├─ balance (native, token)                      │
 │    ├─ fee     (estimate)                           │
 │    ├─ send    (native, token)                      │
-│    └─ tx      (status)                             │
+│    ├─ tx      (status)                             │
+│    └─ exchange (createRequest)                     │
 └───────────────────┬────────────────────────────────┘
                     │
 ┌───────────────────▼────────────────────────────────┐
@@ -479,6 +481,110 @@ curl "http://localhost:3001/trpc/tx.status?input=%7B%22txId%22%3A%220xabc123...%
 
 ---
 
+### exchange.createRequest
+
+**Type:** `mutation`
+
+Create an exchange request. Under the hood the server:
+1. Validates coin-network mappings (deposit + withdraw enabled)
+2. Finds or creates a **MasterWallet** via Tatum v3 (`/v3/{slug}/wallet`)
+3. Derives a fresh **DepositAddress** from the master wallet xpub
+4. Calculates the exchange rate via Tatum Price API (or `rate = 1` for bridge)
+5. Creates an **ExchangeRequest** with a human-readable `orderId`
+6. Registers a Tatum **ADDRESS_EVENT** subscription (webhook) on the deposit address
+
+**Input:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `fromCoinId` | `string` | ✅ | Source coin ID (from `Coin.id`) |
+| `fromNetworkId` | `string` | ✅ | Source network ID (from `Network.id`) |
+| `toCoinId` | `string` | ✅ | Destination coin ID |
+| `toNetworkId` | `string` | ✅ | Destination network ID |
+| `fromAmount` | `number` | ✅ | Amount the user sends (must be > 0) |
+| `toAmount` | `number` | ✅ | Expected receive amount (must be > 0) |
+| `clientWithdrawAddress` | `string` | ✅ | Address where the user wants to receive funds |
+| `feeAmount` | `number` | ❌ | Optional client-side fee hint (≥ 0) |
+
+**curl:**
+```bash
+curl -X POST http://localhost:3001/trpc/exchange.createRequest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fromCoinId": "<coin-btc-id>",
+    "fromNetworkId": "<net-btc-id>",
+    "toCoinId": "<coin-eth-id>",
+    "toNetworkId": "<net-eth-id>",
+    "fromAmount": 0.001,
+    "toAmount": 0.01,
+    "clientWithdrawAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD58"
+  }'
+```
+
+**Response:**
+```json
+{
+  "result": {
+    "data": {
+      "id": "cmnlohunv0000owf51a00d8kw",
+      "orderId": "bravel-somikt",
+      "depositAddress": {
+        "address": "bc1qyyjztna66fgm9r92uqw6kvcpz47xukfrxpfppj"
+      },
+      "fromAmount": 0.001,
+      "toAmount": 0.03280771,
+      "estimatedRate": 32.80770843,
+      "feeAmount": 0,
+      "status": "CREATED"
+    }
+  }
+}
+```
+
+**Errors:**
+| Code | Message |
+|------|---------|
+| `BAD_REQUEST` | Source and destination must differ by network or coin |
+| `BAD_REQUEST` | Selected source coin-network pair is not available for deposits |
+| `BAD_REQUEST` | Selected destination coin-network pair is not available for payouts |
+| `BAD_REQUEST` | Minimum deposit amount is X |
+| `INTERNAL_SERVER_ERROR` | Tatum wallet generation / address derivation failed |
+| `INTERNAL_SERVER_ERROR` | TATUM_WEBHOOK_URL is not configured |
+
+**Flow diagram:**
+```
+Client                          Server                           Tatum API
+  │                               │                                  │
+  │  POST exchange.createRequest  │                                  │
+  │──────────────────────────────>│                                  │
+  │                               │  Check coin-network mappings     │
+  │                               │  (DB lookup)                     │
+  │                               │                                  │
+  │                               │  GET /v3/{slug}/wallet           │
+  │                               │────────────────────────────────->│
+  │                               │<─────────────────────────────────│
+  │                               │  { xpub, mnemonic }             │
+  │                               │                                  │
+  │                               │  GET /v3/{slug}/address/{xpub}/N │
+  │                               │────────────────────────────────->│
+  │                               │<─────────────────────────────────│
+  │                               │  { address }                    │
+  │                               │                                  │
+  │                               │  GET /v4/data/rate/symbol        │
+  │                               │────────────────────────────────->│
+  │                               │<─────────────────────────────────│
+  │                               │  { value }                      │
+  │                               │                                  │
+  │                               │  POST /v4/subscription           │
+  │                               │────────────────────────────────->│
+  │                               │<─────────────────────────────────│
+  │                               │  { id }                         │
+  │                               │                                  │
+  │  { id, orderId, address, ... }│                                  │
+  │<──────────────────────────────│                                  │
+```
+
+---
+
 ## tRPC Wire Format
 
 This service uses **tRPC v11** with the default transformer (no superjson).
@@ -634,6 +740,7 @@ Runtime errors (e.g., RPC node timeout, invalid mnemonic) return HTTP 500 with:
 ## Security
 
 - **No private keys stored** — keys are derived on-the-fly and never persisted
+- **Mnemonic encryption** — master wallet mnemonics are AES-256-GCM encrypted (stored as `surprise` field)
 - **Zod validation** — all inputs validated before reaching business logic
 - **No CORS by default** — add CORS headers in production if needed
 - **Environment variables** — `TATUM_API_KEY` and `PORT` loaded from `.env`
@@ -651,6 +758,11 @@ Runtime errors (e.g., RPC node timeout, invalid mnemonic) return HTTP 500 with:
 |----------|---------|-------------|
 | `PORT` | `3001` | HTTP server port |
 | `TATUM_API_KEY` | — | Tatum API key for RPC gateway access |
+| `DATABASE_URL` | — | PostgreSQL connection string |
+| `SECRET` | — | Encryption key for master wallet mnemonics |
+| `SALT_ROUNDS` | `10` | PBKDF2 iterations for key derivation |
+| `TATUM_WEBHOOK_URL` | — | URL where Tatum sends deposit notifications |
+| `TATUM_SUBSCRIPTION_NETWORK_TYPE` | `mainnet` | Tatum subscription network type |
 
 ### Docker
 
@@ -684,7 +796,8 @@ curl -f http://localhost:3001/health || exit 1
 │       ├── balance.ts        # balance.native, balance.token
 │       ├── fee.ts            # fee.estimate
 │       ├── send.ts           # send.native, send.token
-│       └── tx.ts             # tx.status
+│       ├── tx.ts             # tx.status
+│       └── exchange.ts       # exchange.createRequest
 ├── chains/
 │   ├── evm.ts               # All EVM chains (ETH, BSC, Polygon, ...)
 │   ├── bitcoin.ts            # BTC, LTC, DOGE, BCH
@@ -693,6 +806,10 @@ curl -f http://localhost:3001/health || exit 1
 │   └── ...                   # 12 more chain modules
 ├── index.ts                  # Chain router (getFamily dispatch)
 ├── types.ts                  # Shared TypeScript interfaces
+├── lib/
+│   ├── crypto.ts             # AES-256-GCM mnemonic encryption
+│   ├── spotRate.ts           # Tatum Price API spot rate calculation
+│   └── orderId.ts            # Human-readable order ID generator
 ├── gateway.ts                # Tatum RPC URL builder
 ├── server.ts                 # Legacy entry point (re-exports tRPC handle)
 ├── tests/
@@ -700,7 +817,12 @@ curl -f http://localhost:3001/health || exit 1
 │   ├── wallet.test.ts        # Crypto wallet tests (84 tests)
 │   ├── routing.test.ts       # getFamily / isTestnet / gatewayUrl (24 tests)
 │   ├── bitcoin.test.ts       # UTXO-specific tests (20 tests)
-│   └── validation.test.ts    # Input validation + edge cases (11 tests)
+│   ├── validation.test.ts    # Input validation + edge cases (11 tests)
+│   ├── crypto.test.ts        # AES-256-GCM encryption tests (8 tests)
+│   ├── spotRate.test.ts      # Spot rate mocked tests (6 tests)
+│   ├── orderId.test.ts       # Order ID generator tests (4 tests)
+│   ├── exchange.test.ts      # Exchange router unit tests (12 tests)
+│   └── exchange-integration.test.ts  # Full integration tests (5 tests)
 └── db/
     ├── schema.prisma         # Prisma 7 schema
     └── seeds/                # Database seed files

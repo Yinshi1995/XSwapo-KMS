@@ -76,6 +76,41 @@ const COINS: CoinDef[] = [
   { code: "CSPR", name: "Casper",          imageUrl: "https://blockchains.tatum.io/assets/img/casper.svg" },
   { code: "EOS",  name: "EOS",             imageUrl: "https://blockchains.tatum.io/assets/img/eos.svg" },
   { code: "OM",   name: "MANTRA",          imageUrl: "https://blockchains.tatum.io/assets/img/mantra.svg" },
+  // Stablecoins (tokens, not native — mapped via TOKEN_MAPPINGS below)
+  { code: "USDT", name: "Tether USD",      imageUrl: "https://assets.coingecko.com/coins/images/325/small/Tether.png" },
+  { code: "USDC", name: "USD Coin",        imageUrl: "https://assets.coingecko.com/coins/images/6319/small/usdc.png" },
+]
+
+// Token ↔ Network mappings with verified mainnet contract addresses.
+// Only coins that are NOT the native coin for a given network need an entry here.
+interface TokenMappingDef {
+  coinCode: string
+  networkCode: string
+  contractAddress: string
+  decimals: number
+}
+
+const TOKEN_MAPPINGS: TokenMappingDef[] = [
+  // ── USDT ──────────────────────────────────────────────────────────────────
+  { coinCode: "USDT", networkCode: "ETH",   contractAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6  },
+  { coinCode: "USDT", networkCode: "BSC",   contractAddress: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
+  { coinCode: "USDT", networkCode: "TRX",   contractAddress: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",       decimals: 6  },
+  { coinCode: "USDT", networkCode: "MATIC", contractAddress: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6  },
+  { coinCode: "USDT", networkCode: "ARB",   contractAddress: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", decimals: 6  },
+  { coinCode: "USDT", networkCode: "OP",    contractAddress: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", decimals: 6  },
+  { coinCode: "USDT", networkCode: "AVAX",  contractAddress: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", decimals: 6  },
+  { coinCode: "USDT", networkCode: "SOL",   contractAddress: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", decimals: 6  },
+
+  // ── USDC ──────────────────────────────────────────────────────────────────
+  { coinCode: "USDC", networkCode: "ETH",   contractAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6  },
+  { coinCode: "USDC", networkCode: "BSC",   contractAddress: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18 },
+  { coinCode: "USDC", networkCode: "TRX",   contractAddress: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",       decimals: 6  },
+  { coinCode: "USDC", networkCode: "MATIC", contractAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6  },
+  { coinCode: "USDC", networkCode: "ARB",   contractAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6  },
+  { coinCode: "USDC", networkCode: "OP",    contractAddress: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", decimals: 6  },
+  { coinCode: "USDC", networkCode: "BASE",  contractAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6  },
+  { coinCode: "USDC", networkCode: "AVAX",  contractAddress: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", decimals: 6  },
+  { coinCode: "USDC", networkCode: "SOL",   contractAddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", decimals: 6  },
 ]
 
 // Every network and which native coin it uses (by Coin.code).
@@ -87,17 +122,17 @@ const NETWORKS: NetworkDef[] = [
   { code: "MATIC",   name: "Polygon",           chain: "MATIC",         tatumWalletSlug: "polygon",   nativeCoinCode: "POL",  decimals: 18, explorerUrl: "https://polygonscan.com",              imageUrl: "https://blockchains.tatum.io/assets/img/polygon.svg" },
   { code: "BTC",     name: "Bitcoin",            chain: "BTC",           tatumWalletSlug: "bitcoin",   nativeCoinCode: "BTC",  decimals: 8,  explorerUrl: "https://blockstream.info",             imageUrl: "https://blockchains.tatum.io/assets/img/bitcoin.svg" },
   { code: "SOL",     name: "Solana",             chain: "SOL",           tatumWalletSlug: "solana",    nativeCoinCode: "SOL",  decimals: 9,  explorerUrl: "https://solscan.io",                   imageUrl: "https://blockchains.tatum.io/assets/img/solana.svg" },
-  { code: "ARB",     name: "Arbitrum One",       chain: "ARBITRUM",      tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://arbiscan.io",                  imageUrl: "https://blockchains.tatum.io/assets/img/arbitrum-one.svg" },
-  { code: "OP",      name: "Optimism",           chain: "OPTIMISM",      tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://optimistic.etherscan.io",      imageUrl: "https://blockchains.tatum.io/assets/img/optimism.svg" },
+  { code: "ARB",     name: "Arbitrum One",       chain: "ARBITRUM",      tatumWalletSlug: "arbitrum",  nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://arbiscan.io",                  imageUrl: "https://blockchains.tatum.io/assets/img/arbitrum-one.svg" },
+  { code: "OP",      name: "Optimism",           chain: "OPTIMISM",      tatumWalletSlug: "optimism",  nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://optimistic.etherscan.io",      imageUrl: "https://blockchains.tatum.io/assets/img/optimism.svg" },
   { code: "BASE",    name: "Base",               chain: "BASE",          tatumWalletSlug: "base",      nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://basescan.org",                 imageUrl: "https://blockchains.tatum.io/assets/img/base.svg" },
   { code: "AVAX",    name: "Avalanche",          chain: "AVAX",          tatumWalletSlug: "avalanche", nativeCoinCode: "AVAX", decimals: 18, explorerUrl: "https://snowtrace.io",                 imageUrl: "https://blockchains.tatum.io/assets/img/avalanche.svg" },
   { code: "XRP",     name: "Ripple",             chain: "XRP",           tatumWalletSlug: "xrp",       nativeCoinCode: "XRP",  decimals: 6,  explorerUrl: "https://xrpscan.com",                  imageUrl: "https://blockchains.tatum.io/assets/img/ripple.svg" },
   { code: "XLM",     name: "Stellar",            chain: "XLM",           tatumWalletSlug: "xlm",       nativeCoinCode: "XLM",  decimals: 7,  explorerUrl: "https://stellar.expert",               imageUrl: "https://blockchains.tatum.io/assets/img/stellar.svg" },
   { code: "LTC",     name: "Litecoin",           chain: "LTC",           tatumWalletSlug: "litecoin",  nativeCoinCode: "LTC",  decimals: 8,  explorerUrl: "https://blockchair.com/litecoin",      imageUrl: "https://blockchains.tatum.io/assets/img/litecoin.svg" },
   { code: "DOGE",    name: "Dogecoin",           chain: "DOGE",          tatumWalletSlug: "dogecoin",  nativeCoinCode: "DOGE", decimals: 8,  explorerUrl: "https://dogechain.info",               imageUrl: "https://blockchains.tatum.io/assets/img/dogecoin.svg" },
-  { code: "ZK",      name: "ZKsync",             chain: "ZKSYNC",        tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://explorer.zksync.io",           imageUrl: "https://blockchains.tatum.io/assets/img/zksync.svg" },
-  { code: "FLR",     name: "Flare",              chain: "FLARE",         tatumWalletSlug: null,        nativeCoinCode: "FLR",  decimals: 18, explorerUrl: "https://flarescan.com",                imageUrl: "https://blockchains.tatum.io/assets/img/flare.svg" },
-  { code: "KAIA",    name: "Kaia",               chain: "KAIA",          tatumWalletSlug: null,        nativeCoinCode: "KAIA", decimals: 18, explorerUrl: "https://kaiascope.com",                imageUrl: "https://blockchains.tatum.io/assets/img/kaia.svg" },
+  { code: "ZK",      name: "ZKsync",             chain: "ZKSYNC",        tatumWalletSlug: "zksync",    nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://explorer.zksync.io",           imageUrl: "https://blockchains.tatum.io/assets/img/zksync.svg" },
+  { code: "FLR",     name: "Flare",              chain: "FLARE",         tatumWalletSlug: "flare",     nativeCoinCode: "FLR",  decimals: 18, explorerUrl: "https://flarescan.com",                imageUrl: "https://blockchains.tatum.io/assets/img/flare.svg" },
+  { code: "KAIA",    name: "Kaia",               chain: "KAIA",          tatumWalletSlug: "kaia",      nativeCoinCode: "KAIA", decimals: 18, explorerUrl: "https://kaiascope.com",                imageUrl: "https://blockchains.tatum.io/assets/img/kaia.svg" },
 
   // ── Tier 2 ──────────────────────────────────────────────────────────────
   { code: "ALGO",    name: "Algorand",           chain: "ALGORAND",      tatumWalletSlug: "algorand",  nativeCoinCode: "ALGO", decimals: 6,  explorerUrl: "https://algoexplorer.io",              imageUrl: "https://blockchains.tatum.io/assets/img/algorand.svg" },
@@ -108,66 +143,79 @@ const NETWORKS: NetworkDef[] = [
   { code: "NEAR",    name: "Near",               chain: "NEAR",          tatumWalletSlug: "near",      nativeCoinCode: "NEAR", decimals: 24, explorerUrl: "https://nearblocks.io",                imageUrl: "https://blockchains.tatum.io/assets/img/near.svg" },
   { code: "XTZ",     name: "Tezos",              chain: "XTZ",           tatumWalletSlug: "xtz",       nativeCoinCode: "XTZ",  decimals: 6,  explorerUrl: "https://tzstats.com",                  imageUrl: "https://blockchains.tatum.io/assets/img/tezos.svg" },
   { code: "EGLD",    name: "MultiversX",         chain: "EGLD",          tatumWalletSlug: "egld",      nativeCoinCode: "EGLD", decimals: 18, explorerUrl: "https://explorer.multiversx.com",      imageUrl: "https://blockchains.tatum.io/assets/img/multiversx.svg" },
-  { code: "FTM",     name: "Fantom",             chain: "FANTOM",        tatumWalletSlug: null,        nativeCoinCode: "FTM",  decimals: 18, explorerUrl: "https://ftmscan.com",                  imageUrl: "https://blockchains.tatum.io/assets/img/fantom.svg" },
-  { code: "CRO",     name: "Cronos",             chain: "CRONOS",        tatumWalletSlug: null,        nativeCoinCode: "CRO",  decimals: 18, explorerUrl: "https://cronoscan.com",                imageUrl: "https://blockchains.tatum.io/assets/img/cronos.svg" },
-  { code: "GLMR",    name: "Moonbeam",           chain: "MOONBEAM",      tatumWalletSlug: null,        nativeCoinCode: "GLMR", decimals: 18, explorerUrl: "https://moonbeam.moonscan.io",         imageUrl: "https://blockchains.tatum.io/assets/img/moonbeam.svg" },
-  { code: "S",       name: "Sonic",              chain: "SONIC",         tatumWalletSlug: null,        nativeCoinCode: "S",    decimals: 18, explorerUrl: "https://explorer.soniclabs.com",       imageUrl: "https://blockchains.tatum.io/assets/img/sonic.svg" },
-  { code: "BERA",    name: "Berachain",          chain: "BERACHAIN",     tatumWalletSlug: null,        nativeCoinCode: "BERA", decimals: 18, explorerUrl: "https://berascan.com",                 imageUrl: "https://blockchains.tatum.io/assets/img/berachain.svg" },
-  { code: "UNI_L2",  name: "Unichain",           chain: "UNICHAIN",      tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://uniscan.xyz",                  imageUrl: "https://blockchains.tatum.io/assets/img/unichain.svg" },
-  { code: "MON",     name: "Monad",              chain: "MONAD",         tatumWalletSlug: null,        nativeCoinCode: "MON",  decimals: 18, explorerUrl: "https://explorer.monad.xyz",           imageUrl: "https://blockchains.tatum.io/assets/img/monad.svg" },
-  { code: "SUI",     name: "SUI",                chain: "SUI",           tatumWalletSlug: null,        nativeCoinCode: "SUI",  decimals: 9,  explorerUrl: "https://suiexplorer.com",              imageUrl: "https://blockchains.tatum.io/assets/img/sui.svg" },
-  { code: "TON",     name: "TON",                chain: "TON",           tatumWalletSlug: null,        nativeCoinCode: "TON",  decimals: 9,  explorerUrl: "https://tonscan.org",                  imageUrl: "https://blockchains.tatum.io/assets/img/ton.svg" },
+  { code: "FTM",     name: "Fantom",             chain: "FANTOM",        tatumWalletSlug: "fantom",    nativeCoinCode: "FTM",  decimals: 18, explorerUrl: "https://ftmscan.com",                  imageUrl: "https://blockchains.tatum.io/assets/img/fantom.svg" },
+  { code: "CRO",     name: "Cronos",             chain: "CRONOS",        tatumWalletSlug: "cronos",    nativeCoinCode: "CRO",  decimals: 18, explorerUrl: "https://cronoscan.com",                imageUrl: "https://blockchains.tatum.io/assets/img/cronos.svg" },
+  { code: "GLMR",    name: "Moonbeam",           chain: "MOONBEAM",      tatumWalletSlug: "moonbeam",  nativeCoinCode: "GLMR", decimals: 18, explorerUrl: "https://moonbeam.moonscan.io",         imageUrl: "https://blockchains.tatum.io/assets/img/moonbeam.svg" },
+  { code: "S",       name: "Sonic",              chain: "SONIC",         tatumWalletSlug: "sonic",     nativeCoinCode: "S",    decimals: 18, explorerUrl: "https://explorer.soniclabs.com",       imageUrl: "https://blockchains.tatum.io/assets/img/sonic.svg" },
+  { code: "BERA",    name: "Berachain",          chain: "BERACHAIN",     tatumWalletSlug: "berachain", nativeCoinCode: "BERA", decimals: 18, explorerUrl: "https://berascan.com",                 imageUrl: "https://blockchains.tatum.io/assets/img/berachain.svg" },
+  { code: "UNI_L2",  name: "Unichain",           chain: "UNICHAIN",      tatumWalletSlug: "unichain",  nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://uniscan.xyz",                  imageUrl: "https://blockchains.tatum.io/assets/img/unichain.svg" },
+  { code: "MON",     name: "Monad",              chain: "MONAD",         tatumWalletSlug: "monad",     nativeCoinCode: "MON",  decimals: 18, explorerUrl: "https://explorer.monad.xyz",           imageUrl: "https://blockchains.tatum.io/assets/img/monad.svg" },
+  { code: "SUI",     name: "SUI",                chain: "SUI",           tatumWalletSlug: "sui",       nativeCoinCode: "SUI",  decimals: 9,  explorerUrl: "https://suiexplorer.com",              imageUrl: "https://blockchains.tatum.io/assets/img/sui.svg" },
+  { code: "TON",     name: "TON",                chain: "TON",           tatumWalletSlug: "ton",       nativeCoinCode: "TON",  decimals: 9,  explorerUrl: "https://tonscan.org",                  imageUrl: "https://blockchains.tatum.io/assets/img/ton.svg" },
   { code: "ZEC",     name: "Zcash",              chain: "ZEC",           tatumWalletSlug: "zcash",     nativeCoinCode: "ZEC",  decimals: 8,  explorerUrl: "https://zcashblockexplorer.com",       imageUrl: "https://blockchains.tatum.io/assets/img/zcash.svg" },
   { code: "XDC",     name: "XinFin",             chain: "XDC",           tatumWalletSlug: "xinfin",    nativeCoinCode: "XDC",  decimals: 18, explorerUrl: "https://explorer.xinfin.network",      imageUrl: "https://blockchains.tatum.io/assets/img/xinfin.svg" },
-  { code: "DOT_AH",  name: "Polkadot Asset Hub", chain: "DOT_AH",       tatumWalletSlug: null,        nativeCoinCode: "DOT",  decimals: 10, explorerUrl: "https://assethub-polkadot.subscan.io", imageUrl: "https://blockchains.tatum.io/assets/img/polkadot-assethub.svg" },
+  { code: "DOT_AH",  name: "Polkadot Asset Hub", chain: "DOT_AH",       tatumWalletSlug: "polkadot-assethub", nativeCoinCode: "DOT",  decimals: 10, explorerUrl: "https://assethub-polkadot.subscan.io", imageUrl: "https://blockchains.tatum.io/assets/img/polkadot-assethub.svg" },
   { code: "ETC",     name: "Ethereum Classic",   chain: "ETC",           tatumWalletSlug: "ethereumclassic", nativeCoinCode: "ETC",  decimals: 18, explorerUrl: "https://blockscout.com/etc/mainnet",   imageUrl: "https://blockchains.tatum.io/assets/img/ethereum-classic.svg" },
-  { code: "CHZ",     name: "Chiliz",             chain: "CHILIZ",        tatumWalletSlug: null,        nativeCoinCode: "CHZ",  decimals: 18, explorerUrl: "https://explorer.chiliz.com",          imageUrl: "https://blockchains.tatum.io/assets/img/chiliz.svg" },
-  { code: "LUMIA",   name: "Lumia",              chain: "LUMIA",         tatumWalletSlug: null,        nativeCoinCode: "LUMIA", decimals: 18, explorerUrl: "https://explorer.lumia.org",           imageUrl: "https://blockchains.tatum.io/assets/img/lumia.svg" },
-  { code: "IOTA",    name: "IOTA EVM",           chain: "IOTA",          tatumWalletSlug: null,        nativeCoinCode: "IOTA", decimals: 18, explorerUrl: "https://explorer.iota.org",            imageUrl: "https://blockchains.tatum.io/assets/img/iota.svg" },
+  { code: "CHZ",     name: "Chiliz",             chain: "CHILIZ",        tatumWalletSlug: "chiliz",    nativeCoinCode: "CHZ",  decimals: 18, explorerUrl: "https://explorer.chiliz.com",          imageUrl: "https://blockchains.tatum.io/assets/img/chiliz.svg" },
+  { code: "LUMIA",   name: "Lumia",              chain: "LUMIA",         tatumWalletSlug: "lumia",     nativeCoinCode: "LUMIA", decimals: 18, explorerUrl: "https://explorer.lumia.org",           imageUrl: "https://blockchains.tatum.io/assets/img/lumia.svg" },
+  { code: "IOTA",    name: "IOTA EVM",           chain: "IOTA",          tatumWalletSlug: "iota",      nativeCoinCode: "IOTA", decimals: 18, explorerUrl: "https://explorer.iota.org",            imageUrl: "https://blockchains.tatum.io/assets/img/iota.svg" },
 
   // ── Tier 3 ──────────────────────────────────────────────────────────────
-  { code: "ARBNOVA", name: "Arbitrum Nova",       chain: "ARBITRUM_NOVA", tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://nova.arbiscan.io",             imageUrl: "https://blockchains.tatum.io/assets/img/arbitrum-nova.svg" },
-  { code: "AURORA",  name: "Aurora",              chain: "AURORA",        tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://explorer.aurora.dev",           imageUrl: "https://blockchains.tatum.io/assets/img/aurora.svg" },
-  { code: "RON",     name: "Ronin",               chain: "RONIN",         tatumWalletSlug: null,        nativeCoinCode: "RON",  decimals: 18, explorerUrl: "https://app.roninchain.com/explorer",  imageUrl: "https://blockchains.tatum.io/assets/img/ronin.svg" },
-  { code: "ROSE",    name: "Oasis",               chain: "OASIS",         tatumWalletSlug: null,        nativeCoinCode: "ROSE", decimals: 18, explorerUrl: "https://explorer.oasis.io",            imageUrl: "https://blockchains.tatum.io/assets/img/oasis.svg" },
-  { code: "RBTC",    name: "Rootstock",            chain: "ROOTSTOCK",     tatumWalletSlug: null,        nativeCoinCode: "RBTC", decimals: 18, explorerUrl: "https://explorer.rsk.co",              imageUrl: "https://blockchains.tatum.io/assets/img/rootstock.svg" },
-  { code: "GNO",     name: "Gnosis",              chain: "GNOSIS",        tatumWalletSlug: null,        nativeCoinCode: "xDAI", decimals: 18, explorerUrl: "https://gnosisscan.io",                imageUrl: "https://blockchains.tatum.io/assets/img/gnosis.svg" },
-  { code: "ISLM",    name: "HAQQ",                chain: "HAQQ",          tatumWalletSlug: null,        nativeCoinCode: "ISLM", decimals: 18, explorerUrl: "https://explorer.haqq.network",        imageUrl: "https://blockchains.tatum.io/assets/img/haqq.svg" },
-  { code: "ONE",     name: "Harmony",             chain: "HARMONY",       tatumWalletSlug: null,        nativeCoinCode: "ONE",  decimals: 18, explorerUrl: "https://explorer.harmony.one",         imageUrl: "https://blockchains.tatum.io/assets/img/harmony.svg" },
-  { code: "KCS",     name: "Kucoin",              chain: "KCC",           tatumWalletSlug: null,        nativeCoinCode: "KCS",  decimals: 18, explorerUrl: "https://explorer.kcc.io",              imageUrl: "https://blockchains.tatum.io/assets/img/kucoin.svg" },
-  { code: "LSK",     name: "Lisk",                chain: "LISK",          tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://blockscout.lisk.com",          imageUrl: "https://blockchains.tatum.io/assets/img/lisk.svg" },
-  { code: "HYPEREVM", name: "HyperEVM",           chain: "HYPEREVM",      tatumWalletSlug: null,        nativeCoinCode: "HYPE", decimals: 18, explorerUrl: "https://explorer.hyperliquid.xyz",     imageUrl: "https://blockchains.tatum.io/assets/img/hyperevm.svg" },
-  { code: "MEGAETH", name: "MegaETH",             chain: "MEGAETH",       tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://megaexplorer.xyz",             imageUrl: "https://blockchains.tatum.io/assets/img/megaeth.svg" },
-  { code: "MOCA",    name: "Moca Chain",           chain: "MOCACHAIN",     tatumWalletSlug: null,        nativeCoinCode: "MOCA", decimals: 18, explorerUrl: null,                                   imageUrl: "https://blockchains.tatum.io/assets/img/mocachain.svg" },
-  { code: "PLASMA",  name: "Plasma",              chain: "PLASMA",        tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: null,                                   imageUrl: "https://blockchains.tatum.io/assets/img/plasma.svg" },
-  { code: "PLUME",   name: "Plume",               chain: "PLUME",         tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://explorer.plumenetwork.xyz",    imageUrl: "https://blockchains.tatum.io/assets/img/plume.svg" },
-  { code: "ABSTRACT", name: "Abstract",           chain: "ABSTRACT",      tatumWalletSlug: null,        nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://explorer.abs.xyz",             imageUrl: "https://blockchains.tatum.io/assets/img/abstract.svg" },
-  { code: "ATOM",    name: "Cosmos",              chain: "COSMOS",        tatumWalletSlug: null,        nativeCoinCode: "ATOM", decimals: 6,  explorerUrl: "https://www.mintscan.io/cosmos",       imageUrl: "https://blockchains.tatum.io/assets/img/cosmos.svg" },
-  { code: "KSM",     name: "Kusama",              chain: "KUSAMA",        tatumWalletSlug: null,        nativeCoinCode: "KSM",  decimals: 12, explorerUrl: "https://kusama.subscan.io",            imageUrl: "https://blockchains.tatum.io/assets/img/kusama.svg" },
-  { code: "KSM_AH",  name: "Kusama Asset Hub",    chain: "KUSAMA_AH",     tatumWalletSlug: null,        nativeCoinCode: "KSM",  decimals: 12, explorerUrl: "https://assethub-kusama.subscan.io",   imageUrl: "https://blockchains.tatum.io/assets/img/kusama-assethub.svg" },
+  { code: "ARBNOVA", name: "Arbitrum Nova",       chain: "ARBITRUM_NOVA", tatumWalletSlug: "arbitrum-nova", nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://nova.arbiscan.io",             imageUrl: "https://blockchains.tatum.io/assets/img/arbitrum-nova.svg" },
+  { code: "AURORA",  name: "Aurora",              chain: "AURORA",        tatumWalletSlug: "aurora",    nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://explorer.aurora.dev",           imageUrl: "https://blockchains.tatum.io/assets/img/aurora.svg" },
+  { code: "RON",     name: "Ronin",               chain: "RONIN",         tatumWalletSlug: "ronin",     nativeCoinCode: "RON",  decimals: 18, explorerUrl: "https://app.roninchain.com/explorer",  imageUrl: "https://blockchains.tatum.io/assets/img/ronin.svg" },
+  { code: "ROSE",    name: "Oasis",               chain: "OASIS",         tatumWalletSlug: "oasis",     nativeCoinCode: "ROSE", decimals: 18, explorerUrl: "https://explorer.oasis.io",            imageUrl: "https://blockchains.tatum.io/assets/img/oasis.svg" },
+  { code: "RBTC",    name: "Rootstock",            chain: "ROOTSTOCK",     tatumWalletSlug: "rootstock", nativeCoinCode: "RBTC", decimals: 18, explorerUrl: "https://explorer.rsk.co",              imageUrl: "https://blockchains.tatum.io/assets/img/rootstock.svg" },
+  { code: "GNO",     name: "Gnosis",              chain: "GNOSIS",        tatumWalletSlug: "gnosis",    nativeCoinCode: "xDAI", decimals: 18, explorerUrl: "https://gnosisscan.io",                imageUrl: "https://blockchains.tatum.io/assets/img/gnosis.svg" },
+  { code: "ISLM",    name: "HAQQ",                chain: "HAQQ",          tatumWalletSlug: "haqq",      nativeCoinCode: "ISLM", decimals: 18, explorerUrl: "https://explorer.haqq.network",        imageUrl: "https://blockchains.tatum.io/assets/img/haqq.svg" },
+  { code: "ONE",     name: "Harmony",             chain: "HARMONY",       tatumWalletSlug: "harmony",   nativeCoinCode: "ONE",  decimals: 18, explorerUrl: "https://explorer.harmony.one",         imageUrl: "https://blockchains.tatum.io/assets/img/harmony.svg" },
+  { code: "KCS",     name: "Kucoin",              chain: "KCC",           tatumWalletSlug: "kucoin",    nativeCoinCode: "KCS",  decimals: 18, explorerUrl: "https://explorer.kcc.io",              imageUrl: "https://blockchains.tatum.io/assets/img/kucoin.svg" },
+  { code: "LSK",     name: "Lisk",                chain: "LISK",          tatumWalletSlug: "lisk",      nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://blockscout.lisk.com",          imageUrl: "https://blockchains.tatum.io/assets/img/lisk.svg" },
+  { code: "HYPEREVM", name: "HyperEVM",           chain: "HYPEREVM",      tatumWalletSlug: "hyperevm",  nativeCoinCode: "HYPE", decimals: 18, explorerUrl: "https://explorer.hyperliquid.xyz",     imageUrl: "https://blockchains.tatum.io/assets/img/hyperevm.svg" },
+  { code: "MEGAETH", name: "MegaETH",             chain: "MEGAETH",       tatumWalletSlug: "megaeth",   nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://megaexplorer.xyz",             imageUrl: "https://blockchains.tatum.io/assets/img/megaeth.svg" },
+  { code: "MOCA",    name: "Moca Chain",           chain: "MOCACHAIN",     tatumWalletSlug: "mocachain", nativeCoinCode: "MOCA", decimals: 18, explorerUrl: null,                                   imageUrl: "https://blockchains.tatum.io/assets/img/mocachain.svg" },
+  { code: "PLASMA",  name: "Plasma",              chain: "PLASMA",        tatumWalletSlug: "plasma",    nativeCoinCode: "ETH",  decimals: 18, explorerUrl: null,                                   imageUrl: "https://blockchains.tatum.io/assets/img/plasma.svg" },
+  { code: "PLUME",   name: "Plume",               chain: "PLUME",         tatumWalletSlug: "plume",     nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://explorer.plumenetwork.xyz",    imageUrl: "https://blockchains.tatum.io/assets/img/plume.svg" },
+  { code: "ABSTRACT", name: "Abstract",           chain: "ABSTRACT",      tatumWalletSlug: "abstract",  nativeCoinCode: "ETH",  decimals: 18, explorerUrl: "https://explorer.abs.xyz",             imageUrl: "https://blockchains.tatum.io/assets/img/abstract.svg" },
+  { code: "ATOM",    name: "Cosmos",              chain: "COSMOS",        tatumWalletSlug: "cosmos",    nativeCoinCode: "ATOM", decimals: 6,  explorerUrl: "https://www.mintscan.io/cosmos",       imageUrl: "https://blockchains.tatum.io/assets/img/cosmos.svg" },
+  { code: "KSM",     name: "Kusama",              chain: "KUSAMA",        tatumWalletSlug: "kusama",    nativeCoinCode: "KSM",  decimals: 12, explorerUrl: "https://kusama.subscan.io",            imageUrl: "https://blockchains.tatum.io/assets/img/kusama.svg" },
+  { code: "KSM_AH",  name: "Kusama Asset Hub",    chain: "KUSAMA_AH",     tatumWalletSlug: "kusama-assethub", nativeCoinCode: "KSM",  decimals: 12, explorerUrl: "https://assethub-kusama.subscan.io",   imageUrl: "https://blockchains.tatum.io/assets/img/kusama-assethub.svg" },
   { code: "VET",     name: "VeChain",             chain: "VET",           tatumWalletSlug: "vechain",   nativeCoinCode: "VET",  decimals: 18, explorerUrl: "https://explore.vechain.org",          imageUrl: "https://blockchains.tatum.io/assets/img/vechain.svg" },
-  { code: "ZIL",     name: "Zilliqa",             chain: "ZIL",           tatumWalletSlug: null,        nativeCoinCode: "ZIL",  decimals: 12, explorerUrl: "https://viewblock.io/zilliqa",         imageUrl: "https://blockchains.tatum.io/assets/img/zilliqa.svg" },
-  { code: "CSPR",    name: "Casper",              chain: "CASPER",        tatumWalletSlug: null,        nativeCoinCode: "CSPR", decimals: 9,  explorerUrl: "https://cspr.live",                    imageUrl: "https://blockchains.tatum.io/assets/img/casper.svg" },
-  { code: "EOS",     name: "EOS",                 chain: "EOS",           tatumWalletSlug: null,        nativeCoinCode: "EOS",  decimals: 4,  explorerUrl: "https://bloks.io",                     imageUrl: "https://blockchains.tatum.io/assets/img/eos.svg" },
-  { code: "OM",      name: "MANTRA Chain",        chain: "MANTRA",        tatumWalletSlug: null,        nativeCoinCode: "OM",   decimals: 6,  explorerUrl: "https://explorer.mantrachain.io",      imageUrl: "https://blockchains.tatum.io/assets/img/mantra.svg" },
+  { code: "ZIL",     name: "Zilliqa",             chain: "ZILLIQA",       tatumWalletSlug: "zilliqa",   nativeCoinCode: "ZIL",  decimals: 12, explorerUrl: "https://viewblock.io/zilliqa",         imageUrl: "https://blockchains.tatum.io/assets/img/zilliqa.svg" },
+  { code: "CSPR",    name: "Casper",              chain: "CASPER",        tatumWalletSlug: "casper",    nativeCoinCode: "CSPR", decimals: 9,  explorerUrl: "https://cspr.live",                    imageUrl: "https://blockchains.tatum.io/assets/img/casper.svg" },
+  { code: "EOS",     name: "EOS",                 chain: "EOS",           tatumWalletSlug: "eos",       nativeCoinCode: "EOS",  decimals: 4,  explorerUrl: "https://bloks.io",                     imageUrl: "https://blockchains.tatum.io/assets/img/eos.svg" },
+  { code: "OM",      name: "MANTRA Chain",        chain: "MANTRA",        tatumWalletSlug: "mantrachain", nativeCoinCode: "OM",   decimals: 6,  explorerUrl: "https://explorer.mantrachain.io",      imageUrl: "https://blockchains.tatum.io/assets/img/mantra.svg" },
 ]
 
 // ─── Seed function ───────────────────────────────────────────────────────────
 
 export async function seedNetworks() {
-  // ── 1. Upsert Coins ──────────────────────────────────────────────────────
+  // ── 0. Clean up all existing data (FK-safe order) ─────────────────────────
+  console.log("Cleaning existing data...")
+  const delSub  = await db.subscription.deleteMany({})
+  const delTx   = await db.transaction.deleteMany({})
+  const delReq  = await db.exchangeRequest.deleteMany({})
+  const delAddr = await db.depositAddress.deleteMany({})
+  const delMw   = await db.masterWallet.deleteMany({})
+  const delGw   = await db.gasWallet.deleteMany({})
+  const delMap  = await db.coinNetworkMapping.deleteMany({})
+  const delNet  = await db.network.deleteMany({})
+  const delCoin = await db.coin.deleteMany({})
+  console.log(
+    `  ✔ Deleted: ${delSub.count} subscriptions, ${delTx.count} transactions, ` +
+    `${delReq.count} exchange requests, ${delAddr.count} deposit addresses, ` +
+    `${delMw.count} master wallets, ${delGw.count} gas wallets, ` +
+    `${delMap.count} mappings, ${delNet.count} networks, ${delCoin.count} coins`
+  )
+
+  // ── 1. Create Coins ──────────────────────────────────────────────────────
   console.log("Seeding coins...")
   let coinCount = 0
   const coinIdByCode = new Map<string, string>()
 
   for (const coin of COINS) {
-    const row = await db.coin.upsert({
-      where: { code: coin.code },
-      update: {
-        name: coin.name,
-        imageUrl: coin.imageUrl,
-      },
-      create: {
+    const row = await db.coin.create({
+      data: {
         code: coin.code,
         name: coin.name,
         imageUrl: coin.imageUrl,
@@ -184,23 +232,14 @@ export async function seedNetworks() {
   }
   console.log(`  ✔ ${coinCount} coins upserted`)
 
-  // ── 2. Upsert Networks ────────────────────────────────────────────────────
+  // ── 2. Create Networks ────────────────────────────────────────────────────
   console.log("Seeding networks...")
   let networkCount = 0
   const networkIdByCode = new Map<string, string>()
 
   for (const net of NETWORKS) {
-    const row = await db.network.upsert({
-      where: { code: net.code },
-      update: {
-        name: net.name,
-        chain: net.chain,
-        tatumWalletSlug: net.tatumWalletSlug,
-        explorerUrl: net.explorerUrl,
-        nativeCoin: net.nativeCoinCode,
-        imageUrl: net.imageUrl,
-      },
-      create: {
+    const row = await db.network.create({
+      data: {
         code: net.code,
         name: net.name,
         chain: net.chain,
@@ -219,7 +258,7 @@ export async function seedNetworks() {
   }
   console.log(`  ✔ ${networkCount} networks upserted`)
 
-  // ── 3. Upsert CoinNetworkMappings (native coin ↔ network) ───────────────
+  // ── 3. Create CoinNetworkMappings (native coin ↔ network) ─────────────
   console.log("Seeding coin-network mappings...")
   let mappingCount = 0
 
@@ -230,15 +269,8 @@ export async function seedNetworks() {
     if (!coinId) throw new Error(`Coin "${net.nativeCoinCode}" not found for network "${net.code}"`)
     if (!networkId) throw new Error(`Network "${net.code}" id not found`)
 
-    await db.coinNetworkMapping.upsert({
-      where: { coinId_networkId: { coinId, networkId } },
-      update: {
-        decimals: net.decimals,
-        isActive: true,
-        depositEnabled: true,
-        withdrawEnabled: true,
-      },
-      create: {
+    await db.coinNetworkMapping.create({
+      data: {
         coinId,
         networkId,
         contractAddress: null,
@@ -254,14 +286,39 @@ export async function seedNetworks() {
   }
   console.log(`  ✔ ${mappingCount} coin-network mappings upserted`)
 
-  console.log(`\nDone — ${coinCount} coins, ${networkCount} networks, ${mappingCount} mappings`)
+  // ── 4. Create CoinNetworkMappings (token ↔ network, e.g. USDT on ETH) ──
+  console.log("Seeding token-network mappings...")
+  let tokenMappingCount = 0
+
+  for (const tm of TOKEN_MAPPINGS) {
+    const coinId = coinIdByCode.get(tm.coinCode)
+    const networkId = networkIdByCode.get(tm.networkCode)
+
+    if (!coinId) throw new Error(`Coin "${tm.coinCode}" not found for token mapping`)
+    if (!networkId) throw new Error(`Network "${tm.networkCode}" not found for token mapping`)
+
+    await db.coinNetworkMapping.create({
+      data: {
+        coinId,
+        networkId,
+        contractAddress: tm.contractAddress,
+        decimals: tm.decimals,
+        isActive: true,
+        depositEnabled: true,
+        withdrawEnabled: true,
+        tatumChainCode: null,
+        binanceNetworkCode: null,
+      },
+    })
+    tokenMappingCount++
+  }
+  console.log(`  ✔ ${tokenMappingCount} token-network mappings upserted`)
+
+  console.log(`\nDone — ${coinCount} coins, ${networkCount} networks, ${mappingCount + tokenMappingCount} mappings`)
 }
 
 // Allow standalone execution: bun run db/seeds/networks.ts
-const isMain =
-  typeof require !== "undefined" && require.main === module
-
-if (isMain) {
+if (import.meta.main) {
   seedNetworks()
     .then(() => process.exit(0))
     .catch((err) => {
