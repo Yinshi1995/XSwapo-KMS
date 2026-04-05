@@ -14,10 +14,16 @@ import type { ChainWallet, DerivedAddress, TxResult, GasEstimate, Balance } from
 import { TATUM_API_KEY, gatewayUrl, tatumHeaders } from "../gateway"
 
 // ─── RPC URL ─────────────────────────────────────────────────────────────────
-// All EVM chains use the same pattern: https://{chain}.gateway.tatum.io
-// Just pass the chain slug (e.g. "ethereum-mainnet") to gatewayUrl().
+// Some Tatum gateway slugs differ from the chain identifiers we use internally.
+const EVM_SLUG_MAP: Record<string, string> = {
+  "avalanche-c-mainnet": "avax-mainnet",
+  "avalanche-c-testnet": "avax-testnet",
+  "harmony-mainnet": "one-mainnet",
+  "harmony-testnet": "one-testnet",
+}
+
 export function evmRpcUrl(chain: string): string {
-  return gatewayUrl(chain)
+  return gatewayUrl(EVM_SLUG_MAP[chain] ?? chain)
 }
 
 // BIP-44: ETH=60, BSC=60 (совместим), MATIC=60
@@ -37,11 +43,16 @@ export function evmProvider(chain: string): JsonRpcProvider {
 }
 
 async function rpc<T>(chain: string, method: string, params: unknown[]): Promise<T> {
-  const res = await fetch(evmRpcUrl(chain), {
+  const url = evmRpcUrl(chain)
+  const res = await fetch(url, {
     method: "POST",
     headers: tatumHeaders(),
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   })
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    throw new Error(`EVM RPC ${method} HTTP ${res.status}: ${text.slice(0, 200)}`)
+  }
   const data = await res.json() as { result?: T; error?: { message: string } }
   if (data.error) throw new Error(`EVM RPC ${method}: ${data.error.message}`)
   return data.result as T

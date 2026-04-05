@@ -90,21 +90,14 @@ export function tonDerivePrivateKey(mnemonic: string, index: number): string {
 
 // ─── 4. Balance ──────────────────────────────────────────────────────────────
 export async function tonGetBalance(address: string): Promise<Balance> {
-  // TON HTTP API (toncenter-compatible): /api/v2/getAddressBalance
-  try {
-    const result = await tonApiGet<{ result: string }>(`/api/v2/getAddressBalance?address=${address}`)
-    const raw = result.result // in nanoTON
-    return {
-      balance: (Number(raw) / 1e9).toString(), // 1 TON = 10^9 nanoTON
-      raw,
-    }
-  } catch {
-    // Fallback: try TON v3 API format
-    const result = await tonApiGet<{ balance: string }>(`/api/v3/account?address=${address}`)
-    return {
-      balance: (Number(result.balance) / 1e9).toString(),
-      raw: result.balance,
-    }
+  // Tatum TON gateway: GET /getAddressBalance?address=...
+  const data = await tonApiGet<{ ok: boolean; result: string }>(
+    `/getAddressBalance?address=${encodeURIComponent(address)}`
+  )
+  const raw = data.result ?? "0"
+  return {
+    balance: (Number(raw) / 1e9).toString(),
+    raw,
   }
 }
 

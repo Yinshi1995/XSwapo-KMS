@@ -126,7 +126,7 @@ export function deriveAddress(xpubOrMnemonic: string, index: number, chain: stri
     case "tezos":       return xtz.xtzDeriveAddress(xpubOrMnemonic, index)
     case "multiversx":  return egld.egldDeriveAddress(xpubOrMnemonic, index)
     case "vechain":     return vet.vetDeriveAddress(xpubOrMnemonic, index)
-    case "cosmos":      return atom.atomDeriveAddress(xpubOrMnemonic, index) // async
+    case "cosmos":      return atom.atomDeriveAddress(xpubOrMnemonic, index)
     case "sui":         return sui.suiDeriveAddress(xpubOrMnemonic, index)
     case "ton":         return ton.tonDeriveAddress(xpubOrMnemonic, index)
     default:            return evm.evmDeriveAddress(xpubOrMnemonic, index)

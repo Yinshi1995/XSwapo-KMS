@@ -8,6 +8,7 @@
 export const TATUM_API_KEY = process.env.TATUM_API_KEY!
 export const TATUM_GATEWAY = process.env.TATUM_GATEWAY ?? "https://{slug}.gateway.tatum.io"
 export const TATUM_DATA_API = process.env.TATUM_DATA_API ?? "https://api.tatum.io/v4"
+export const TATUM_REST_API = process.env.TATUM_REST_API ?? "https://api.tatum.io/v3"
 
 /** Build a Tatum RPC URL for a given chain slug, e.g. "ethereum-mainnet" */
 export function gatewayUrl(slug: string): string {

@@ -10,12 +10,13 @@
  */
 
 import { HDNodeWallet, Mnemonic } from "ethers"
-import { Wallet as XrplWallet, Client, xrpToDrops, dropsToXrp } from "xrpl"
+import { Client, xrpToDrops, dropsToXrp } from "xrpl"
+import { deriveAddress as xrpDeriveClassicAddress } from "ripple-keypairs"
 import type { ChainWallet, DerivedAddress, TxResult, Balance } from "../types"
 import { TATUM_API_KEY, gatewayUrl } from "../gateway"
 
-const XRP_RPC = gatewayUrl("xrp-mainnet")
-const XRP_TESTNET_RPC = gatewayUrl("xrp-testnet")
+const XRP_RPC = gatewayUrl("ripple-mainnet")
+const XRP_TESTNET_RPC = gatewayUrl("ripple-testnet")
 
 // Tatum uses m/44'/144'/0'/0 — account-level path
 const XRP_DERIVATION_PATH = "m/44'/144'/0'"
@@ -65,9 +66,9 @@ export function xrpDeriveAddress(xpub: string, index: number): DerivedAddress {
   const child = hd.deriveChild(0).deriveChild(index)
   // Get compressed public key from the derived child
   const pubKeyHex = child.publicKey.replace("0x", "")
-  // Use xrpl to derive the classic address from the public key
-  const wallet = new XrplWallet(undefined as any, pubKeyHex)
-  return { address: wallet.classicAddress }
+  // Use ripple-keypairs to derive the classic address from the public key
+  const address = xrpDeriveClassicAddress(pubKeyHex)
+  return { address }
 }
 
 // ─── 3. Private key derivation ───────────────────────────────────────────────

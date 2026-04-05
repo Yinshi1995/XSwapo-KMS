@@ -19,8 +19,9 @@ import * as bitcoin from "bitcoinjs-lib"
 import * as ecc from "tiny-secp256k1"
 import { BIP32Factory } from "bip32"
 import { generateMnemonic, mnemonicToSeedSync } from "bip39"
+import * as bchaddr from "bchaddrjs"
 import type { ChainWallet, DerivedAddress, TxResult, Balance } from "../types"
-import { TATUM_API_KEY, TATUM_DATA_API, gatewayUrl } from "../gateway"
+import { TATUM_API_KEY, TATUM_DATA_API, TATUM_REST_API, gatewayUrl } from "../gateway"
 
 bitcoin.initEccLib(ecc)
 const bip32 = BIP32Factory(ecc)
@@ -215,18 +216,18 @@ export function btcDerivePrivateKey(mnemonic: string, index: number, isTestnet =
 }
 
 // ─── 4. Баланс адреса ─────────────────────────────────────────────────────────
-// Используем Tatum Data API v4 — возвращает incoming/outgoing по UTXO
+// Tatum v3 REST API: GET /v3/bitcoin/address/balance/{address}
 export async function btcGetBalance(address: string, isTestnet = false): Promise<Balance> {
-  const chain = isTestnet ? "bitcoin-testnet" : "bitcoin-mainnet"
-  const data = await dataApi<{
-    incoming?: string; outgoing?: string
-    incomingPending?: string; outgoingPending?: string
-  }>(`/data/balances?chain=${chain}&addresses=${address}`)
-
-  const confirmed = (Number(data.incoming ?? 0) - Number(data.outgoing ?? 0))
+  const chain = isTestnet ? "bitcoin-testnet" : "bitcoin"
+  const res = await fetch(`${TATUM_REST_API}/${chain}/address/balance/${address}`, {
+    headers: { "x-api-key": TATUM_API_KEY },
+  })
+  if (!res.ok) throw new Error(`BTC balance API HTTP ${res.status}`)
+  const data = await res.json() as { incoming: string; outgoing: string }
+  const balance = (Number(data.incoming) - Number(data.outgoing)).toFixed(8)
   return {
-    balance: confirmed.toFixed(8),
-    raw: Math.round(confirmed * 1e8).toString(), // в satoshi
+    balance,
+    raw: Math.round(Number(balance) * 1e8).toString(),
   }
 }
 
@@ -434,16 +435,58 @@ export function utxoDerivePrivateKey(mnemonic: string, index: number, chain: str
   return child.privateKey.toString("hex")
 }
 
+// Tatum v3 REST API chain name mapping
+const UTXO_REST_CHAIN: Record<string, string> = {
+  litecoin: "litecoin",
+  dogecoin: "dogecoin",
+  bitcoincash: "bcash",
+}
+
 export async function utxoGetBalance(address: string, chain: string): Promise<Balance> {
   const { config, testnet } = getChainConfig(chain)
-  const dataChain = testnet ? config.testnetDataChain : config.dataChain
-  const data = await dataApi<{
-    incoming?: string; outgoing?: string
-  }>(`/data/balances?chain=${dataChain}&addresses=${address}`)
-  const confirmed = Number(data.incoming ?? 0) - Number(data.outgoing ?? 0)
+  const baseName = chain.replace(/-mainnet|-testnet/g, "").replace("bitcoin-cash", "bitcoincash").replace("bch", "bitcoincash")
+  const restChain = UTXO_REST_CHAIN[baseName]
+
+  // BCH: use Rostrum RPC via bitcoin-cash-mainnet-rostrum gateway
+  if (baseName === "bitcoincash") {
+    const bchUrl = testnet ? config.testnetRpc : gatewayUrl("bitcoin-cash-mainnet-rostrum")
+    // Rostrum requires cashaddr format (without prefix)
+    let cashAddr = address
+    try {
+      const full = bchaddr.toCashAddress(address)
+      cashAddr = full.replace("bitcoincash:", "")
+    } catch { /* already cashaddr or will fail at Rostrum */ }
+    const res = await fetch(bchUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": TATUM_API_KEY },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1,
+        method: "blockchain.address.get_balance",
+        params: [cashAddr],
+      }),
+    })
+    if (!res.ok) throw new Error(`BCH Rostrum balance HTTP ${res.status}`)
+    const data = await res.json() as { result?: { confirmed: number; unconfirmed: number }; error?: any }
+    if (data.error) throw new Error(`BCH Rostrum: ${JSON.stringify(data.error)}`)
+    const satoshis = (data.result?.confirmed ?? 0) + (data.result?.unconfirmed ?? 0)
+    return {
+      balance: (satoshis / 1e8).toFixed(8),
+      raw: satoshis.toString(),
+    }
+  }
+
+  // LTC, DOGE: use Tatum v3 REST API
+  if (!restChain) throw new Error(`No REST API mapping for ${chain}`)
+  const suffix = testnet ? "-testnet" : ""
+  const res = await fetch(`${TATUM_REST_API}/${restChain}${suffix}/address/balance/${address}`, {
+    headers: { "x-api-key": TATUM_API_KEY },
+  })
+  if (!res.ok) throw new Error(`UTXO balance API HTTP ${res.status} for ${chain}`)
+  const data = await res.json() as { incoming: string; outgoing: string }
+  const balance = (Number(data.incoming) - Number(data.outgoing)).toFixed(8)
   return {
-    balance: confirmed.toFixed(8),
-    raw: Math.round(confirmed * 1e8).toString(),
+    balance,
+    raw: Math.round(Number(balance) * 1e8).toString(),
   }
 }
 

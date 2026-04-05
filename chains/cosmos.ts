@@ -56,15 +56,21 @@ export function atomGenerateWallet(): ChainWallet {
 }
 
 // ─── 2. Address derivation ───────────────────────────────────────────────────
-export async function atomDeriveAddress(mnemonic: string, index: number): Promise<DerivedAddress> {
-  const { DirectSecp256k1HdWallet, stringToPath } = getCosmJS()
-  const path = stringToPath(`m/44'/118'/0'/0/${index}`)
-  const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, {
-    hdPaths: [path],
-    prefix: "cosmos",
-  })
-  const [account] = await wallet.getAccounts()
-  return { address: account.address }
+// xpub is a secp256k1 extended public key (from ethers HDNodeWallet)
+// We derive the child public key, then hash it to a cosmos bech32 address.
+export function atomDeriveAddress(xpub: string, index: number): DerivedAddress {
+  const { toBech32, toHex } = require("@cosmjs/encoding")
+  const { ripemd160, sha256 } = require("@cosmjs/crypto")
+
+  const hd = ethers.HDNodeWallet.fromExtendedKey(xpub)
+  const child = hd.deriveChild(0).deriveChild(index)
+  // compressed public key bytes
+  const pubKeyHex = child.publicKey.replace("0x", "")
+  const pubKeyBytes = Buffer.from(pubKeyHex, "hex")
+  // cosmos address = ripemd160(sha256(compressedPubKey))
+  const hash = ripemd160(sha256(pubKeyBytes))
+  const address = toBech32("cosmos", hash)
+  return { address }
 }
 
 // ─── 3. Private key derivation ───────────────────────────────────────────────
