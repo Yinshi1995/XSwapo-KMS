@@ -124,3 +124,31 @@ export type Chain =
   | CosmosChain
   | SuiChain
   | TonChain
+
+// ─── Sweep types ────────────────────────────────────────────────────────────
+
+export interface SweepInput {
+  destinationAddress: string
+  chain: string
+  amount: string
+  contractAddress?: string
+  decimals?: number
+  depositPrivateKey: string
+  depositAddress: string
+  gasPrivateKey: string
+  gasAddress: string
+  gasFeeMultiplier?: number
+  gasMinReserve?: string
+}
+
+export type SweepResult =
+  | { status: "SWEEP_SENT"; txId: string; amount: string; destination: string }
+  | { status: "GAS_TOPUP_SENT"; gasTopupTxId: string; gasAmount: string; message: string }
+  | { status: "ERROR"; code: SweepErrorCode; message: string; details?: unknown }
+
+export type SweepErrorCode =
+  | "GAS_ESTIMATION_FAILED"
+  | "GAS_WALLET_INSUFFICIENT"
+  | "GAS_TOPUP_FAILED"
+  | "SWEEP_FAILED"
+  | "INVALID_CHAIN"
