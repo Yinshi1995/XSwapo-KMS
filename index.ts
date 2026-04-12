@@ -25,23 +25,23 @@ import type { Chain, ChainFamily, ChainWallet, DerivedAddress, TxResult, Balance
 
 // ─── Определяем тип цепи ─────────────────────────────────────────────────────
 
-// DB chain codes (uppercase) → family
+// DB chain slugs (uppercased for lookup) → family
 const CHAIN_FAMILY_MAP: Record<string, ChainFamily> = {
-  BTC: "bitcoin",
-  LTC: "litecoin",
-  DOGE: "dogecoin",
+  BITCOIN: "bitcoin",
+  LITECOIN: "litecoin",
+  DOGECOIN: "dogecoin",
   BCH: "bitcoincash",
   TRON: "tron",
-  SOL: "solana",
+  SOLANA: "solana",
   XRP: "xrp",
   XLM: "stellar",
-  ALGO: "algorand",
+  ALGORAND: "algorand",
   NEAR: "near",
-  DOT: "polkadot",  DOT_AH: "polkadot",  KUSAMA: "polkadot",  KUSAMA_AH: "polkadot",
-  ADA: "cardano",
-  XTZ: "tezos",
-  EGLD: "multiversx",
-  VET: "vechain",
+  POLKADOT: "polkadot",  "POLKADOT-ASSETHUB": "polkadot",  KUSAMA: "polkadot",  "KUSAMA-ASSETHUB": "polkadot",
+  CARDANO: "cardano",
+  TEZOS: "tezos",
+  MULTIVERSX: "multiversx",
+  VECHAIN: "vechain",
   COSMOS: "cosmos",  MANTRA: "cosmos",
   SUI: "sui",
   TON: "ton",

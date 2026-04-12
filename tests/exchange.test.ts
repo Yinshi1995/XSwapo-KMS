@@ -215,10 +215,10 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
           id: "mapping-src",
           coinId: "coin-btc",
           networkId: "net-btc",
-          tatumChainCode: "BTC",
+          tatumChainCode: null,
           network: {
             id: "net-btc",
-            chain: "BTC",
+            chain: "bitcoin",
             tatumWalletSlug: "bitcoin",
           },
           coin: { id: "coin-btc", code: "BTC" },
@@ -231,7 +231,7 @@ describe("exchange.createRequest — full happy path (mocked)", () => {
         networkId: "net-eth",
         network: {
           id: "net-eth",
-          chain: "ETH",
+          chain: "ethereum",
         },
         coin: { id: "coin-eth", code: "ETH" },
       }
@@ -505,8 +505,8 @@ describe("exchange.createRequest — bridge mode", () => {
           id: "mapping-usdt-eth",
           coinId: "coin-usdt",
           networkId: "net-eth",
-          tatumChainCode: "ETH",
-          network: { id: "net-eth", chain: "ETH", tatumWalletSlug: "ethereum" },
+          tatumChainCode: null,
+          network: { id: "net-eth", chain: "ethereum", tatumWalletSlug: "ethereum" },
           coin: { id: "coin-usdt", code: "USDT" },
         }
       }
@@ -514,7 +514,7 @@ describe("exchange.createRequest — bridge mode", () => {
         id: "mapping-usdt-tron",
         coinId: "coin-usdt",
         networkId: "net-tron",
-        network: { id: "net-tron", chain: "TRON" },
+        network: { id: "net-tron", chain: "tron" },
         coin: { id: "coin-usdt", code: "USDT" },
       }
     }) as any
