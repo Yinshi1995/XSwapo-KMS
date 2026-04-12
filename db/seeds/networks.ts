@@ -1,4 +1,6 @@
 import db from "../index"
+import { generateWallet, deriveAddress } from "../../index"
+import { encryptMnemonic } from "../../lib/crypto"
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -184,7 +186,7 @@ const NETWORKS: NetworkDef[] = [
   { code: "ZIL",     name: "Zilliqa",             chain: "zilliqa",       tatumWalletSlug: "zilliqa",   nativeCoinCode: "ZIL",  decimals: 12, explorerUrl: "https://viewblock.io/zilliqa",         imageUrl: "https://blockchains.tatum.io/assets/img/zilliqa.svg" },
   { code: "CSPR",    name: "Casper",              chain: "casper",        tatumWalletSlug: "casper",    nativeCoinCode: "CSPR", decimals: 9,  explorerUrl: "https://cspr.live",                    imageUrl: "https://blockchains.tatum.io/assets/img/casper.svg" },
   { code: "EOS",     name: "EOS",                 chain: "eos",           tatumWalletSlug: "eos",       nativeCoinCode: "EOS",  decimals: 4,  explorerUrl: "https://bloks.io",                     imageUrl: "https://blockchains.tatum.io/assets/img/eos.svg" },
-  { code: "OM",      name: "MANTRA Chain",        chain: "mantra",        tatumWalletSlug: "mantrachain", nativeCoinCode: "OM",   decimals: 6,  explorerUrl: "https://explorer.mantrachain.io",      imageUrl: "https://blockchains.tatum.io/assets/img/mantra.svg" },
+  { code: "OM",      name: "MANTRA Chain",        chain: "mantrachain",   tatumWalletSlug: "mantrachain", nativeCoinCode: "OM",   decimals: 6,  explorerUrl: "https://explorer.mantrachain.io",      imageUrl: "https://blockchains.tatum.io/assets/img/mantra.svg" },
 ]
 
 // ─── Seed function ───────────────────────────────────────────────────────────
@@ -314,7 +316,43 @@ export async function seedNetworks() {
   }
   console.log(`  ✔ ${tokenMappingCount} token-network mappings upserted`)
 
-  console.log(`\nDone — ${coinCount} coins, ${networkCount} networks, ${mappingCount + tokenMappingCount} mappings`)
+  // ── 5. Create GasWallets (one per network) ────────────────────────────
+  console.log("Seeding gas wallets...")
+  let gasWalletCount = 0
+  let gasWalletErrors = 0
+
+  for (const net of NETWORKS) {
+    const networkId = networkIdByCode.get(net.code)
+    if (!networkId) continue
+
+    try {
+      const wallet = generateWallet(net.chain)
+      const addr = await deriveAddress(wallet.xpub, 0, net.chain)
+      const surprise = encryptMnemonic(wallet.mnemonic)
+
+      await db.gasWallet.create({
+        data: {
+          networkId,
+          address: addr.address,
+          xpub: wallet.xpub,
+          surprise,
+          type: "MASTER",
+          status: "ACTIVE",
+          balance: 0,
+          minBalance: 0,
+          targetBalance: 0,
+          isPrimary: true,
+        },
+      })
+      gasWalletCount++
+    } catch (err) {
+      gasWalletErrors++
+      console.error(`  ✗ Gas wallet for ${net.code} (${net.chain}):`, (err as Error).message)
+    }
+  }
+  console.log(`  ✔ ${gasWalletCount} gas wallets created${gasWalletErrors ? `, ${gasWalletErrors} errors` : ""}`)
+
+  console.log(`\nDone — ${coinCount} coins, ${networkCount} networks, ${mappingCount + tokenMappingCount} mappings, ${gasWalletCount} gas wallets`)
 }
 
 // Allow standalone execution: bun run db/seeds/networks.ts

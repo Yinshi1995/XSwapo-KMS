@@ -42,7 +42,7 @@ const CHAIN_FAMILY_MAP: Record<string, ChainFamily> = {
   TEZOS: "tezos",
   MULTIVERSX: "multiversx",
   VECHAIN: "vechain",
-  COSMOS: "cosmos",  MANTRA: "cosmos",
+  COSMOS: "cosmos",  MANTRACHAIN: "evm",
   SUI: "sui",
   TON: "ton",
 }
@@ -70,6 +70,7 @@ export function getFamily(chain: string): ChainFamily {
   if (key.startsWith("MULTIVERSX") || key.startsWith("EGLD") || key.startsWith("ELROND")) return "multiversx"
   if (key.startsWith("VECHAIN") || key.startsWith("VET")) return "vechain"
   if (key.startsWith("COSMOS") || key.startsWith("ATOM")) return "cosmos"
+  if (key.startsWith("MANTRACHAIN")) return "evm"
   if (key.startsWith("SUI")) return "sui"
   if (key.startsWith("TON")) return "ton"
 
@@ -82,14 +83,14 @@ export function isTestnet(chain: string): boolean {
     lower.includes("amoy") || lower.includes("devnet")
 }
 
-/** Auto-append "-mainnet" when the chain has no network suffix */
+/** Auto-append "-mainnet" when the chain has no network suffix; always lowercase */
 export function normalizeChain(chain: string): string {
   const lower = chain.toLowerCase()
   if (
     lower.includes("mainnet") || lower.includes("testnet") ||
     lower.includes("sepolia") || lower.includes("amoy") || lower.includes("devnet")
-  ) return chain
-  return `${chain}-mainnet`
+  ) return lower
+  return `${lower}-mainnet`
 }
 
 // ─── 1. Генерация кошелька ───────────────────────────────────────────────────
