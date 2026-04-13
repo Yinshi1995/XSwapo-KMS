@@ -116,7 +116,7 @@ export const exchangeRouter = router({
 
       // ── Step 2: Determine chain codes ─────────────────────────────────
       const baseChainCode = sourceMapping.tatumChainCode || sourceNetwork.chain
-      const subscriptionChain = sourceNetwork.chain
+      const subscriptionChain = sourceNetwork.tatumWalletSlug || sourceNetwork.chain
 
       // ── Step 3: Get or create MasterWallet ────────────────────────────
       let masterWallet = await db.masterWallet.findUnique({
