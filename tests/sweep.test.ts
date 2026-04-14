@@ -194,7 +194,7 @@ describe("sweep.toExchange — happy path native", () => {
     const data = await trpcData(res)
     expect(data.status).toBe("SWEEP_SENT")
     expect(data.txId).toBe("0xsweptx111")
-    expect(data.amount).toBe("1.5")
+    expect(data.amount).toBe("1.998")
     expect(data.destination).toBe("0xKuCoinAddress123")
   })
 
@@ -206,7 +206,7 @@ describe("sweep.toExchange — happy path native", () => {
     expect(call.chain).toBe("ethereum-mainnet")
     expect(call.privateKey).toBe(validNativeInput.depositPrivateKey)
     expect(call.to).toBe("0xKuCoinAddress123")
-    expect(call.amount).toBe("1.5")
+    expect(call.amount).toBe("1.998")
   })
 })
 

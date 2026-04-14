@@ -226,15 +226,26 @@ export const sweepRouter = router({
           console.log(`[sweep] Token sweep sent: ${result.txId}`)
           return { status: "SWEEP_SENT", txId: result.txId, amount, destination: destinationAddress }
         } else {
-          console.log(`[sweep] Sending native amount=${amount} to ${destinationAddress}`)
+          // Native sweep: gas comes from the same balance, so subtract fee
+          const sendAmountScaled = depositNativeScaled - requiredGasScaled
+          if (sendAmountScaled <= 0n) {
+            return {
+              status: "ERROR",
+              code: "INSUFFICIENT_FUNDS",
+              message: `Deposit balance ${depositBalance.balance} is not enough to cover gas ${requiredGas} for native sweep on ${chain}`,
+              details: { balance: depositBalance.balance, requiredGas },
+            }
+          }
+          const sendAmount = fromBigScale(sendAmountScaled)
+          console.log(`[sweep] Sending native amount=${sendAmount} (deposit=${depositBalance.balance} - gas=${requiredGas}) to ${destinationAddress}`)
           const result = await sendNative({
             chain,
             privateKey: depositPrivateKey,
             to: destinationAddress,
-            amount,
+            amount: sendAmount,
           })
           console.log(`[sweep] Native sweep sent: ${result.txId}`)
-          return { status: "SWEEP_SENT", txId: result.txId, amount, destination: destinationAddress }
+          return { status: "SWEEP_SENT", txId: result.txId, amount: sendAmount, destination: destinationAddress }
         }
       } catch (err) {
         console.error(`[sweep] Sweep send failed:`, err)
