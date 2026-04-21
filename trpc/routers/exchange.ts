@@ -11,15 +11,13 @@
  *  5a. Автосоздание GasWallet для source и destination сетей
  *  6. Серверный расчёт курса (Binance)
  *  7. Создание ExchangeRequest
- *  8. Создание Tatum Subscription (webhook)
- *  9. Возврат ответа клиенту
+ *  8. Возврат ответа клиенту
  */
 
 import { z } from "zod"
 import { TRPCError } from "@trpc/server"
 import { router, publicProcedure } from "../init"
 import db from "../../db/index"
-import { TATUM_DATA_API, tatumHeaders } from "../../gateway"
 import { generateWallet, deriveAddress } from "../../index"
 import { encryptMnemonic } from "../../lib/crypto"
 import { getSpotRate } from "../../lib/spotRate"
@@ -116,7 +114,6 @@ export const exchangeRouter = router({
 
       // ── Step 2: Determine chain codes ─────────────────────────────────
       const baseChainCode = sourceMapping.tatumChainCode || sourceNetwork.chain
-      const subscriptionChain = sourceNetwork.tatumWalletSlug || sourceNetwork.chain
 
       // ── Step 3: Get or create MasterWallet ────────────────────────────
       let masterWallet = await db.masterWallet.findUnique({
@@ -243,57 +240,7 @@ export const exchangeRouter = router({
         },
       })
 
-      // ── Step 8: Create Tatum Subscription (webhook) ───────────────────
-      const webhookUrl = process.env.TATUM_WEBHOOK_URL || process.env.WEBHOOK_URL
-      if (!webhookUrl) {
-        fail("TATUM_WEBHOOK_URL is not configured", "INTERNAL_SERVER_ERROR")
-      }
-
-      const networkType = process.env.TATUM_SUBSCRIPTION_NETWORK_TYPE || "mainnet"
-
-      const subRes = await fetch(
-        `${TATUM_DATA_API}/subscription?type=${networkType}`,
-        {
-          method: "POST",
-          headers: tatumHeaders(),
-          body: JSON.stringify({
-            type: "ADDRESS_EVENT",
-            attr: {
-              chain: subscriptionChain,
-              address: depositAddress.address,
-              url: webhookUrl,
-            },
-          }),
-        },
-      )
-
-      if (!subRes.ok) {
-        const body = await subRes.text()
-        console.error(`Tatum subscription failed (${subRes.status}): ${body}`)
-        // Non-fatal: request is already created, subscription can be retried
-      }
-
-      let subscriptionId: string | null = null
-      if (subRes.ok) {
-        const subData = (await subRes.json()) as { id?: string }
-        subscriptionId = subData.id ?? null
-      }
-
-      if (subscriptionId) {
-        await db.subscription.create({
-          data: {
-            type: "ADDRESS_EVENT",
-            webhookUrl,
-            tatumSubscriptionId: subscriptionId,
-            isActive: true,
-            chain: subscriptionChain,
-            depositAddressId: depositAddress.id,
-            exchangeRequestId: exchangeRequest.id,
-          },
-        })
-      }
-
-      // ── Step 9: Return response ───────────────────────────────────────
+      // ── Step 8: Return response ───────────────────────────────────────
       return {
         id: exchangeRequest.id,
         orderId: exchangeRequest.orderId,

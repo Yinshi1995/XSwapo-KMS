@@ -1,7 +1,6 @@
 // import { seedUsers } from "./users"
 // import { seedWallets } from "./wallets"
 // import { seedExchangeRequests } from "./exchangeRequests"
-// import { seedSubscriptions } from "./subscriptions"
 // import { seedTransactions } from "./transactions"
 // import { seedNetworks } from "./networks"
 import { seedKucoinChains } from "./update-kucoin-chains"
@@ -12,7 +11,6 @@ const seed = async () => {
   // await seedMappings()
   // await seedWallets()
   // await seedExchangeRequests()
-  // await seedSubscriptions()
   // await seedTransactions()
   await seedKucoinChains()
 }
