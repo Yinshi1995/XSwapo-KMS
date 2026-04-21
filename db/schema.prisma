@@ -110,6 +110,12 @@ enum TransactionType {
   GAS_TOPUP
 }
 
+enum SubscriptionType {
+  ADDRESS_EVENT
+  INCOMING_FUNGIBLE_TX
+  INCOMING_NATIVE_TX
+}
+
 enum WalletStatus {
   ACTIVE
   DISABLED
@@ -204,6 +210,26 @@ model CoinNetworkMapping {
   internalComment    String?
 
   @@unique([coinId, networkId])
+}
+
+model Subscription {
+  id                  String           @id @default(cuid())
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  type                SubscriptionType
+  webhookUrl          String
+  tatumSubscriptionId String           @unique
+  isActive            Boolean          @default(true)
+
+  /// Cached blockchain chain code used for this subscription (e.g. "ETH", "TRON").
+  /// Optional for older rows; all new subscriptions should populate this.
+  chain String?
+
+  depositAddressId String
+  depositAddress   DepositAddress @relation(fields: [depositAddressId], references: [id])
+
+  exchangeRequestId String?
+  exchangeRequest   ExchangeRequest? @relation(fields: [exchangeRequestId], references: [id])
 }
 
 model Transaction {
@@ -309,6 +335,7 @@ model ExchangeRequest {
   failedReason String?
 
   transactions  Transaction[]
+  subscriptions Subscription[]
 
   @@index([status, createdAt])
   @@index([fromCoinId, toCoinId])
@@ -347,6 +374,7 @@ model DepositAddress {
   masterWalletxpub String
   masterWallet     MasterWallet @relation(fields: [masterWalletxpub], references: [xpub])
 
+  subscriptions    Subscription[]
   exchangeRequests ExchangeRequest[]
   transactions     Transaction[]
 

@@ -194,6 +194,7 @@ const NETWORKS: NetworkDef[] = [
 export async function seedNetworks() {
   // ── 0. Clean up all existing data (FK-safe order) ─────────────────────────
   console.log("Cleaning existing data...")
+  const delSub  = await db.subscription.deleteMany({})
   const delTx   = await db.transaction.deleteMany({})
   const delReq  = await db.exchangeRequest.deleteMany({})
   const delAddr = await db.depositAddress.deleteMany({})
@@ -203,7 +204,7 @@ export async function seedNetworks() {
   const delNet  = await db.network.deleteMany({})
   const delCoin = await db.coin.deleteMany({})
   console.log(
-    `  ✔ Deleted: ${delTx.count} transactions, ` +
+    `  ✔ Deleted: ${delSub.count} subscriptions, ${delTx.count} transactions, ` +
     `${delReq.count} exchange requests, ${delAddr.count} deposit addresses, ` +
     `${delMw.count} master wallets, ${delGw.count} gas wallets, ` +
     `${delMap.count} mappings, ${delNet.count} networks, ${delCoin.count} coins`
