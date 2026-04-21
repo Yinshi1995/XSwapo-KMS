@@ -12,6 +12,7 @@
  */
 
 import { depositPoller } from "./deposit-poller"
+import { emitNotification } from "./notifications/emit"
 import { pipeline as notificationPipeline } from "./notifications/pipeline"
 import { startTransferWatcher, stopTransferWatcher } from "./transfer-watcher"
 
@@ -21,8 +22,10 @@ export async function startPipeline(): Promise<void> {
   if (started) return
   started = true
 
+  let notificationsReady = false
   try {
     await notificationPipeline.initialize()
+    notificationsReady = true
   } catch (err) {
     console.warn(
       "[pipeline] notification pipeline failed to initialize — continuing without it:",
@@ -34,6 +37,23 @@ export async function startPipeline(): Promise<void> {
   startTransferWatcher()
 
   console.info("[pipeline] started (deposit poller + transfer watcher + notifications)")
+
+  // Fire-and-forget startup event so operators see a heartbeat in Telegram
+  // every time the pipeline comes online. Routes to Telegram only (see
+  // notifications/taxonomy.ts → system.startup).
+  if (notificationsReady) {
+    await emitNotification("system.startup", {
+      correlationId: `startup:${Date.now()}`,
+      summary: `KMS pipeline online (deposit poller + transfer watcher)`,
+      payload: {
+        service: "kms",
+        pollIntervalMs: Number(process.env.DEPOSIT_POLL_INTERVAL_MS ?? 30_000),
+        depositTimeoutHours: Number(process.env.DEPOSIT_TIMEOUT_HOURS ?? 6),
+        txWatcherIntervalMs: Number(process.env.TRANSFER_WATCHER_INTERVAL_MS ?? 30_000),
+        appEnv: process.env.APP_ENV ?? process.env.NODE_ENV ?? "development",
+      },
+    })
+  }
 }
 
 export async function stopPipeline(): Promise<void> {
