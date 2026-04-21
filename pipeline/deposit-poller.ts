@@ -157,7 +157,19 @@ export class DepositPoller {
 
     this.isRunning = true
     runPollCycle()
-      .catch(err => console.error("[deposit-poller] cycle error:", err))
+      .catch((err) => {
+        // Postgres P2037 (TooManyConnections) can fire when the DB is saturated
+        // by other services. Downgrade to a warning and retry on the next tick
+        // instead of spamming a full stacktrace every cycle.
+        const code = (err as { code?: string })?.code
+        if (code === "P2037") {
+          console.warn(
+            "[deposit-poller] DB saturated (P2037 TooManyConnections) — retrying next cycle",
+          )
+          return
+        }
+        console.error("[deposit-poller] cycle error:", err)
+      })
       .finally(() => {
         this.isRunning = false
       })

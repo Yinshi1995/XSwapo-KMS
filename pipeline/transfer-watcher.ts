@@ -180,7 +180,14 @@ async function tick() {
       await processPendingTransaction(record)
     }
   } catch (err) {
-    console.error("[tx-watcher] tick failed:", err)
+    const code = (err as { code?: string })?.code
+    if (code === "P2037") {
+      console.warn(
+        "[tx-watcher] DB saturated (P2037 TooManyConnections) — retrying next tick",
+      )
+    } else {
+      console.error("[tx-watcher] tick failed:", err)
+    }
   } finally {
     running = false
   }
