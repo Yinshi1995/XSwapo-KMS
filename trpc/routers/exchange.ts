@@ -22,6 +22,7 @@ import { generateWallet, deriveAddress } from "../../index"
 import { encryptMnemonic } from "../../lib/crypto"
 import { getSpotRate } from "../../lib/spotRate"
 import { generateOrderId } from "../../lib/orderId"
+import { emitNotification } from "../../pipeline/notifications/emit"
 
 // ─── Input schema ────────────────────────────────────────────────────────────
 
@@ -238,6 +239,32 @@ export const exchangeRouter = router({
           depositAddressId: depositAddress.id,
           status: "CREATED",
         },
+      })
+
+      // ── Step 7a: Notify operators (Telegram + Redis) ──────────────────
+      // Fire-and-forget: notification failures never break request creation.
+      void emitNotification("deposit.created", {
+        correlationId: exchangeRequest.id,
+        summary:
+          `New exchange request ${exchangeRequest.orderId}: ` +
+          `${fromAmount} ${fromCoin.code} (${sourceNetwork.code}) → ` +
+          `${serverToAmount.toFixed(8)} ${toCoin.code} (${destNetwork.code})`,
+        payload: {
+          exchangeRequestId: exchangeRequest.id,
+          orderId: exchangeRequest.orderId,
+          depositAddress: depositAddress.address,
+          fromAmount: String(fromAmount),
+          fromCoin: fromCoin.code,
+          fromNetwork: sourceNetwork.code,
+          fromChain: sourceNetwork.chain,
+          toAmount: serverToAmount.toFixed(8),
+          toCoin: toCoin.code,
+          toNetwork: destNetwork.code,
+          clientWithdrawAddress: input.clientWithdrawAddress,
+          estimatedRate: String(serverRate),
+          feeAmount: String(feeAmount),
+        },
+        routingOverride: { sendToTelegram: true },
       })
 
       // ── Step 8: Return response ───────────────────────────────────────
