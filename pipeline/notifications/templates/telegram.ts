@@ -3,15 +3,15 @@ import { maskAddress, maskTxHash } from "../sanitize"
 
 // ─── Godmode deep-link ───────────────────────────────────────────────
 // Admins navigate to the deposit-management modal via
-//   https://godmode.xswapo.io/deposit-addresses?send=<depositAddressId>
+//   https://godmode.xswapo.io/deposit-addresses?send=<onChainDepositAddress>
 // Base URL is overridable via env for staging / local dev.
 
 const GODMODE_BASE_URL = (
   process.env.GODMODE_BASE_URL?.trim() || "https://godmode.xswapo.io"
 ).replace(/\/+$/, "")
 
-function godmodeDepositUrl(depositAddressId: string): string {
-  return `${GODMODE_BASE_URL}/deposit-addresses?send=${encodeURIComponent(depositAddressId)}`
+function godmodeDepositUrl(depositAddress: string): string {
+  return `${GODMODE_BASE_URL}/deposit-addresses?send=${encodeURIComponent(depositAddress)}`
 }
 
 // ─── Severity presentation ───────────────────────────────────────────
@@ -251,14 +251,14 @@ function buildActionBlock(event: NotificationEvent): string[] {
 // from Telegram straight to the deposit-management modal.
 
 function buildAdminLinksBlock(p: Record<string, unknown>): string[] {
-  const depositAddressId = typeof p.depositAddressId === "string"
-    ? p.depositAddressId.trim()
+  const depositAddress = typeof p.depositAddress === "string"
+    ? p.depositAddress.trim()
     : ""
-  if (!depositAddressId) return []
+  if (!depositAddress) return []
 
   return [
     "",
-    `🔗 ${link(godmodeDepositUrl(depositAddressId), "Open in Godmode")}`,
+    `🔗 ${link(godmodeDepositUrl(depositAddress), "Open in Godmode")}`,
   ]
 }
 
