@@ -9,7 +9,7 @@
 
 import { z } from "zod"
 import {
-  router, publicProcedure,
+  router, adminProcedure,
   ChainSchema, AddressSchema, AmountSchema, PrivateKeySchema,
 } from "../init"
 import { performSweepToExchange, type SweepResult } from "../../lib/sweep"
@@ -24,7 +24,13 @@ export {
 export type { SweepResult } from "../../lib/sweep"
 
 export const sweepRouter = router({
-  toExchange: publicProcedure
+  /**
+   * sweep.toExchange — admin-only. Callers identify wallets by address; the
+   * KMS self-sources the private keys from its own DB (encrypted mnemonic
+   * store). Explicit privateKeys are accepted as an escape hatch and make the
+   * call purely stateless (no DB lookup).
+   */
+  toExchange: adminProcedure
     .input(
       z.object({
         destinationAddress: AddressSchema,
@@ -32,13 +38,13 @@ export const sweepRouter = router({
         amount: AmountSchema,
         contractAddress: z.string().min(1).optional(),
         decimals: z.number({ coerce: true }).int().optional(),
-        depositPrivateKey: PrivateKeySchema,
         depositAddress: AddressSchema,
-        gasPrivateKey: PrivateKeySchema,
         gasAddress: AddressSchema,
+        depositPrivateKey: PrivateKeySchema.optional(),
+        gasPrivateKey: PrivateKeySchema.optional(),
         gasFeeMultiplier: z.number().positive().optional(),
         gasMinReserve: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }): Promise<SweepResult> => {
       return await performSweepToExchange(input)

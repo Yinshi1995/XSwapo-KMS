@@ -118,6 +118,7 @@ export async function processPolledDeposit(
       chain: request.fromNetwork.chain,
       classification: classification.kind,
       depositAddress: request.depositAddress!.address,
+      depositAddressId: request.depositAddress!.id,
       status: nextStatus,
       source: "polling",
     },

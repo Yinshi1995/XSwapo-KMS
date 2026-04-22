@@ -300,8 +300,14 @@ export async function sendNative(params: {
   to: string
   amount: string
 }): Promise<TxResult> {
-  const { chain: rawChain, privateKey, mnemonic, fromIndex = 0, to, amount } = params
+  const { chain: rawChain, mnemonic, fromIndex = 0, to, amount } = params
   const chain = normalizeChain(rawChain)
+
+  // Auto-derive privateKey from mnemonic+fromIndex for families that need one
+  // but the caller only supplied the HD material. Lets callers pass either
+  // form interchangeably; KMS routers pass mnemonic+index so we derive here.
+  const privateKey = params.privateKey
+    ?? (mnemonic ? derivePrivateKey(mnemonic, fromIndex, chain) : undefined)
 
   switch (getFamily(chain)) {
     case "bitcoin":
@@ -398,9 +404,13 @@ export async function sendToken(params: {
   amount: string
   decimals?: number
 }): Promise<TxResult> {
-  const { chain: rawChain, privateKey, mnemonic, fromIndex = 0, to, contractAddress, amount, decimals } = params
+  const { chain: rawChain, mnemonic, fromIndex = 0, to, contractAddress, amount, decimals } = params
   const chain = normalizeChain(rawChain)
   const family = getFamily(chain)
+
+  // Auto-derive privateKey from mnemonic+fromIndex if only HD material supplied.
+  const privateKey = params.privateKey
+    ?? (mnemonic ? derivePrivateKey(mnemonic, fromIndex, chain) : undefined)
 
   switch (family) {
     case "tron":

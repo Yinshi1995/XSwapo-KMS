@@ -730,6 +730,7 @@ export async function processTatumAddressEventWebhook(
       fromAddress: canonicalPayload.counterAddress,
       toAddress: canonicalPayload.address,
       depositAddress: request.depositAddress?.address,
+      depositAddressId: request.depositAddress?.id,
       status: request.status,
       source: "Tatum",
     },

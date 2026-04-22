@@ -24,10 +24,11 @@ Multi-chain RPC + signing microservice. tRPC v11 over Bun. One HTTP surface (`PO
 
 ```
 trpc/server.ts (Bun.serve) → trpc/routers/index.ts (appRouter)
-  ├─ wallet   → generate, deriveAddress, derivePrivateKey
+  ├─ wallet   → generate, deriveAddress, derivePrivateKey [admin]
   ├─ balance  → native, token
   ├─ fee      → estimate
-  ├─ send     → native, token
+  ├─ send     → native, token                              [admin]
+  ├─ sweep    → toExchange                                 [admin]
   ├─ tx       → status
   └─ exchange → createRequest
             │
@@ -39,10 +40,12 @@ trpc/server.ts (Bun.serve) → trpc/routers/index.ts (appRouter)
 
 | File | Responsibility |
 |------|---------------|
-| `trpc/server.ts` | `Bun.serve()` + `fetchRequestHandler`; exposes `GET /health` and `/trpc/*` |
-| `trpc/init.ts` | tRPC instance, shared Zod schemas |
+| `trpc/server.ts` | `Bun.serve()` + `fetchRequestHandler`; exposes `GET /health`, `/trpc/*`, `/admin/notifications` |
+| `trpc/init.ts` | tRPC instance, shared Zod schemas, `adminProcedure` (token auth) |
 | `trpc/routers/*.ts` | Per-domain routers — thin validation + dispatch into chain modules |
 | `index.ts` | `getFamily(chain)` → returns the chain module implementing the family interface |
+| `lib/walletResolver.ts` | Resolve on-chain address → `{ mnemonic, index }` by DB lookup + decrypt |
+| `lib/sweep.ts` | Sweep orchestration: gas top-up + broadcast to exchange |
 | `chains/evm.ts` | All EVM chains (Ethereum, BSC, Polygon, Arbitrum, Optimism, Avalanche, Base, …) |
 | `chains/bitcoin.ts` | BTC, LTC, DOGE, BCH (UTXO, BIP-84, bitcoinjs-lib) |
 | `chains/tron.ts` | TRON + TRC-20 (tronweb) |
@@ -61,7 +64,7 @@ trpc/server.ts (Bun.serve) → trpc/routers/index.ts (appRouter)
 
 - **Pure functions, no classes, no singletons.** Every chain module exports a small set of free functions that match the family interface.
 - **Zod validation at the tRPC boundary.** Never bypass it inside a router.
-- **Never return private keys by default.** `wallet.derivePrivateKey` and `send.*` are the only procedures that touch secrets.
+- **Never return or accept private keys across the tRPC boundary.** `wallet.derivePrivateKey` is the single admin-only escape hatch; `send.*` / `sweep.*` resolve keys internally via `lib/walletResolver.ts` — see [No-private-keys contract](#no-private-keys-contract).
 - **HD derivation:**
   - EVM: 12-word mnemonic, BIP-44 path `m/44'/60'/0'/0/<index>`
   - Bitcoin/UTXO: 24-word, BIP-84 `zpub`
@@ -78,11 +81,47 @@ TATUM_API_KEY              # Tatum API key (gateway + price + subscription)
 DATABASE_URL               # Postgres
 SECRET                     # AES-256-GCM key for mnemonic encryption
 SALT_ROUNDS=10             # PBKDF2 iterations
+KMS_ADMIN_TOKEN            # shared secret for admin-only procedures
+                           # (send.*, sweep.*, wallet.derivePrivateKey,
+                           # /admin/notifications)
 TATUM_WEBHOOK_URL          # where Tatum posts ADDRESS_EVENT (consumed by webhook/)
 TATUM_SUBSCRIPTION_NETWORK_TYPE=mainnet
 ```
 
 Never log these. Never return them from an endpoint.
+
+## Authentication
+
+| Surface | Public | Admin-only |
+|---------|--------|-----------|
+| `wallet.generate`, `wallet.deriveAddress` | ✓ | |
+| `wallet.derivePrivateKey` | | ✓ |
+| `balance.native`, `balance.token` | ✓ | |
+| `fee.estimate`, `tx.status`, `rate.*` | ✓ | |
+| `exchange.createRequest` | ✓ | |
+| `send.native`, `send.token` | | ✓ |
+| `sweep.toExchange` | | ✓ |
+| `GET /health` | ✓ | |
+| `/admin/notifications` | | ✓ |
+
+Admin calls must present `Authorization: Bearer $KMS_ADMIN_TOKEN` (or
+`x-admin-token: $KMS_ADMIN_TOKEN`). If `KMS_ADMIN_TOKEN` is unset, the server
+logs a loud warning at startup and allows all admin calls — only acceptable
+for local dev and tests; always set this variable in production.
+
+## No-private-keys contract
+
+`send.*` and `sweep.*` do **not** accept plaintext mnemonics or private keys
+from the caller. Admin services pass `from` (send) or `depositAddress` +
+`gasAddress` (sweep), and KMS:
+
+1. Looks up the DepositAddress or GasWallet row in Postgres.
+2. Decrypts `surprise` (AES-256-GCM) with `SECRET`.
+3. Derives the private key for the target chain family.
+4. Signs and broadcasts.
+
+Key material therefore never crosses the KMS process boundary. Callers only
+need `KMS_ADMIN_TOKEN`; they must not carry `SECRET`.
 
 ## Testing
 

@@ -1,6 +1,19 @@
 import type { NotificationEvent, EventSeverity, EventType } from "../types"
 import { maskAddress, maskTxHash } from "../sanitize"
 
+// ─── Godmode deep-link ───────────────────────────────────────────────
+// Admins navigate to the deposit-management modal via
+//   https://godmode.xswapo.io/deposit-addresses?send=<depositAddressId>
+// Base URL is overridable via env for staging / local dev.
+
+const GODMODE_BASE_URL = (
+  process.env.GODMODE_BASE_URL?.trim() || "https://godmode.xswapo.io"
+).replace(/\/+$/, "")
+
+function godmodeDepositUrl(depositAddressId: string): string {
+  return `${GODMODE_BASE_URL}/deposit-addresses?send=${encodeURIComponent(depositAddressId)}`
+}
+
 // ─── Severity presentation ───────────────────────────────────────────
 
 const SEVERITY_BADGE: Record<EventSeverity, { icon: string; label: string }> = {
@@ -139,6 +152,12 @@ function italic(text: string): string {
   return `<i>${esc(text)}</i>`
 }
 
+function link(href: string, text: string): string {
+  // `href` is a controlled URL built from escaped `depositAddressId`; we still
+  // HTML-escape it as a defence-in-depth measure.
+  return `<a href="${esc(href)}">${esc(text)}</a>`
+}
+
 // ─── Layout primitives ───────────────────────────────────────────────
 
 const DIV = "━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -196,7 +215,10 @@ function buildFinancialBlock(p: Record<string, unknown>): string[] {
   }
 
   if (p.depositAddress) {
-    lines.push(field("Deposit", code(maskAddress(String(p.depositAddress)))))
+    // Deposit addresses are platform-managed (not client PII) and admins must
+    // be able to read and act on them. Show the full value — unlike
+    // `fromAddress` / `toAddress` above, which stay masked.
+    lines.push(field("Deposit", code(String(p.depositAddress))))
   }
 
   if (p.txHash) {
@@ -221,6 +243,23 @@ function buildActionBlock(event: NotificationEvent): string[] {
     lines.push(`   ${esc(hint)}`)
   }
   return lines
+}
+
+// ─── Admin quick-links block ─────────────────────────────────────────
+//
+// Renders deep-links to the godmode admin UI so an on-call operator can jump
+// from Telegram straight to the deposit-management modal.
+
+function buildAdminLinksBlock(p: Record<string, unknown>): string[] {
+  const depositAddressId = typeof p.depositAddressId === "string"
+    ? p.depositAddressId.trim()
+    : ""
+  if (!depositAddressId) return []
+
+  return [
+    "",
+    `🔗 ${link(godmodeDepositUrl(depositAddressId), "Open in Godmode")}`,
+  ]
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -301,6 +340,12 @@ export function formatTelegramMessage(event: NotificationEvent): string {
   const actions = buildActionBlock(event)
   if (actions.length > 0) {
     lines.push(...actions)
+  }
+
+  // ── Admin quick-links (Godmode)
+  const adminLinks = buildAdminLinksBlock(p)
+  if (adminLinks.length > 0) {
+    lines.push(...adminLinks)
   }
 
   // ── Footer

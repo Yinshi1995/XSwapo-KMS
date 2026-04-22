@@ -4,11 +4,20 @@
 
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch"
 import { appRouter } from "./routers/index"
+import { createKmsContext, extractBearerToken } from "./init"
 import { startPipeline, stopPipeline } from "../pipeline"
 import { handleAdminNotificationsRequest } from "../pipeline/notifications/admin"
 
 const PORT = Number(process.env.PORT ?? 3001)
 const PIPELINE_ENABLED = process.env.PIPELINE_DISABLED !== "1"
+const ADMIN_TOKEN = process.env.KMS_ADMIN_TOKEN?.trim() || null
+
+function unauthorized(): Response {
+  return new Response(
+    JSON.stringify({ error: "Admin token required" }),
+    { status: 401, headers: { "Content-Type": "application/json" } },
+  )
+}
 
 export async function handle(req: Request): Promise<Response> {
   const url = new URL(req.url)
@@ -19,6 +28,7 @@ export async function handle(req: Request): Promise<Response> {
       JSON.stringify({
         status: "ok",
         pipeline: PIPELINE_ENABLED,
+        authEnabled: ADMIN_TOKEN !== null,
         chains: [
           "ethereum-mainnet", "bsc-mainnet", "polygon-mainnet",
           "tron-mainnet", "bitcoin-mainnet", "solana-mainnet",
@@ -30,6 +40,9 @@ export async function handle(req: Request): Promise<Response> {
 
   // ── Admin notifications API ─────────────────────────────────────────────
   if (url.pathname.startsWith("/admin/notifications")) {
+    if (ADMIN_TOKEN !== null && extractBearerToken(req) !== ADMIN_TOKEN) {
+      return unauthorized()
+    }
     const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID()
     return handleAdminNotificationsRequest(req, requestId)
   }
@@ -40,7 +53,7 @@ export async function handle(req: Request): Promise<Response> {
       endpoint: "/trpc",
       req,
       router: appRouter,
-      createContext: () => ({}),
+      createContext: () => createKmsContext({ req }),
     })
   }
 

@@ -8,6 +8,7 @@
 
 import { estimateFee, getBalance, sendNative, sendToken, getFamily } from "../index"
 import type { GasEstimate, ChainFamily } from "../types"
+import { resolveSignerByAddress, WalletResolutionError } from "./walletResolver"
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -41,12 +42,39 @@ export interface SweepToExchangeParams {
   amount: string
   contractAddress?: string
   decimals?: number
-  depositPrivateKey: string
+  /** Address of the deposit wallet. Required — KMS will resolve the signer. */
   depositAddress: string
-  gasPrivateKey: string
+  /** Address of the gas wallet. Required — KMS will resolve the signer. */
   gasAddress: string
+  /** Optional explicit private keys. If absent, KMS resolves them by address. */
+  depositPrivateKey?: string
+  gasPrivateKey?: string
   gasFeeMultiplier?: number
   gasMinReserve?: string
+}
+
+/**
+ * Resolve a private key for `address` on `chain`. Prefers the explicit
+ * override when provided (legacy path), otherwise falls back to the DB lookup.
+ */
+async function resolveKey(
+  address: string,
+  chain: string,
+  explicit: string | undefined,
+  label: string,
+): Promise<string> {
+  if (explicit) return explicit
+  try {
+    const signer = await resolveSignerByAddress(address)
+    // Late import to avoid a cycle
+    const { derivePrivateKey } = await import("../index")
+    return derivePrivateKey(signer.mnemonic, signer.index, chain)
+  } catch (err) {
+    const msg = err instanceof WalletResolutionError
+      ? err.message
+      : err instanceof Error ? err.message : String(err)
+    throw new Error(`Failed to resolve ${label} signer for ${address}: ${msg}`)
+  }
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -129,8 +157,7 @@ export async function performSweepToExchange(
   const {
     destinationAddress, chain, amount,
     contractAddress, decimals,
-    depositPrivateKey, depositAddress,
-    gasPrivateKey, gasAddress,
+    depositAddress, gasAddress,
     gasFeeMultiplier = DEFAULT_GAS_FEE_MULTIPLIER,
     gasMinReserve = DEFAULT_GAS_MIN_RESERVE,
   } = params
@@ -139,6 +166,22 @@ export async function performSweepToExchange(
   const family = getFamily(chain)
 
   console.log(`[sweep] Starting on ${chain} (family=${family}), token=${isTokenTransfer}, amount=${amount}`)
+
+  // Resolve signers. Callers may pass explicit privateKeys (legacy / in-process
+  // pipeline), otherwise KMS self-sources them from the DB by address.
+  let depositPrivateKey: string
+  let gasPrivateKey: string
+  try {
+    depositPrivateKey = await resolveKey(depositAddress, chain, params.depositPrivateKey, "deposit")
+    gasPrivateKey = await resolveKey(gasAddress, chain, params.gasPrivateKey, "gas")
+  } catch (err) {
+    console.error(`[sweep] Signer resolution failed:`, err)
+    return {
+      status: "ERROR",
+      code: "SWEEP_FAILED",
+      message: err instanceof Error ? err.message : String(err),
+    }
+  }
 
   // ── 1. Estimate gas fee ────────────────────────────────────────────
   let feeNative: string

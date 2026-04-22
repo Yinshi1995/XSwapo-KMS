@@ -310,6 +310,8 @@ async function settleConfirmedTransferToExchange(
       toCoin: request.toCoin.code,
       toAmount: formatDecimal(request.toAmount),
       network: request.toNetwork.code,
+      depositAddress: request.depositAddress?.address,
+      depositAddressId: request.depositAddress?.id,
     },
   })
 

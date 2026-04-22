@@ -3,7 +3,10 @@
  */
 
 import { z } from "zod"
-import { router, publicProcedure, ChainSchema, XpubSchema, IndexSchema, MnemonicSchema } from "../init"
+import {
+  router, publicProcedure, adminProcedure,
+  ChainSchema, XpubSchema, IndexSchema, MnemonicSchema,
+} from "../init"
 import { generateWallet, deriveAddress, derivePrivateKey } from "../../index"
 
 export const walletRouter = router({
@@ -19,7 +22,8 @@ export const walletRouter = router({
       return await deriveAddress(input.xpub, input.index, input.chain)
     }),
 
-  derivePrivateKey: publicProcedure
+  /** Admin-only: exposes a raw private key. Never call this from client code. */
+  derivePrivateKey: adminProcedure
     .input(z.object({ mnemonic: MnemonicSchema, index: IndexSchema, chain: ChainSchema }))
     .query(({ input }) => {
       return { key: derivePrivateKey(input.mnemonic, input.index, input.chain) }

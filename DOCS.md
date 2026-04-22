@@ -22,6 +22,7 @@
   - [send.token](#sendtoken)
   - [tx.status](#txstatus)
   - [exchange.createRequest](#exchangecreaterequest)
+  - [sweep.toExchange](#sweeptoexchange)
 - [tRPC Wire Format](#trpc-wire-format)
 - [Chain-Specific Notes](#chain-specific-notes)
 - [Error Handling](#error-handling)
@@ -70,7 +71,8 @@ The server starts on `http://localhost:3001` by default (set `PORT` env var to c
 │    ├─ wallet  (generate, deriveAddress, deriveKey)  │
 │    ├─ balance (native, token)                      │
 │    ├─ fee     (estimate)                           │
-│    ├─ send    (native, token)                      │
+│    ├─ send    (native, token)       [admin]        │
+│    ├─ sweep   (toExchange)          [admin]        │
 │    ├─ tx      (status)                             │
 │    └─ exchange (createRequest)                     │
 └───────────────────┬────────────────────────────────┘
@@ -128,6 +130,7 @@ GET /health
 ```json
 {
   "status": "ok",
+  "authEnabled": true,
   "chains": [
     "ethereum-mainnet",
     "bsc-mainnet",
@@ -141,9 +144,40 @@ GET /health
 
 ---
 
+## Authentication
+
+Endpoints fall into two tiers:
+
+| Tier | Procedures | Auth |
+|------|------------|------|
+| **Public** | `wallet.generate`, `wallet.deriveAddress`, `balance.*`, `fee.estimate`, `tx.status`, `rate.*`, `exchange.createRequest`, `GET /health` | none |
+| **Admin**  | `wallet.derivePrivateKey`, `send.native`, `send.token`, `sweep.toExchange`, `/admin/notifications` | `KMS_ADMIN_TOKEN` |
+
+Admin calls must present the shared secret as either:
+
+- `Authorization: Bearer $KMS_ADMIN_TOKEN`
+- `x-admin-token: $KMS_ADMIN_TOKEN`
+
+Missing / wrong token → HTTP 401 for REST routes, tRPC `UNAUTHORIZED` error for tRPC routes.
+
+When `KMS_ADMIN_TOKEN` is not configured, the server logs a loud warning at startup and lets every admin call through. This keeps local dev and tests workable, but production deployments must set the variable.
+
+### No-private-keys contract
+
+`send.*` and `sweep.*` never accept plaintext mnemonics or private keys from the caller in the recommended flow. Callers pass the managed wallet by address (`from` for sends, `depositAddress` + `gasAddress` for sweeps). KMS then:
+
+1. Looks up the DepositAddress (or GasWallet) row in Postgres.
+2. Decrypts `surprise` (AES-256-GCM, with `SECRET`).
+3. Derives the private key for the target chain family.
+4. Signs and broadcasts.
+
+Private keys therefore never cross the KMS process boundary. Admin callers only need `KMS_ADMIN_TOKEN`; they do **not** need `SECRET`.
+
+---
+
 ## API Reference
 
-All procedures are served under `/trpc`. Use the [tRPC wire format](#trpc-wire-format) below.
+All procedures are served under `/trpc`. Use the [tRPC wire format](#trpc-wire-format) below. Admin procedures additionally require `Authorization: Bearer $KMS_ADMIN_TOKEN`.
 
 ### wallet.generate
 
@@ -210,9 +244,9 @@ curl "http://localhost:3001/trpc/wallet.deriveAddress?input=%7B%22xpub%22%3A%22x
 
 ### wallet.derivePrivateKey
 
-**Type:** `query`
+**Type:** `query` (**admin-only** — requires `Authorization: Bearer $KMS_ADMIN_TOKEN`)
 
-Derive a private key from a mnemonic at a given HD index.
+Derive a private key from a mnemonic at a given HD index. Prefer calling `send.*` / `sweep.*` by address instead — this endpoint exposes raw key material and is intended for migrations and break-glass admin tooling only.
 
 **Input:**
 | Field | Type | Required | Description |
@@ -223,7 +257,8 @@ Derive a private key from a mnemonic at a given HD index.
 
 **curl:**
 ```bash
-curl "http://localhost:3001/trpc/wallet.derivePrivateKey?input=%7B%22mnemonic%22%3A%22abandon+badge+...%22%2C%22index%22%3A0%2C%22chain%22%3A%22ethereum-mainnet%22%7D"
+curl -H "Authorization: Bearer $KMS_ADMIN_TOKEN" \
+  "http://localhost:3001/trpc/wallet.derivePrivateKey?input=%7B%22mnemonic%22%3A%22abandon+badge+...%22%2C%22index%22%3A0%2C%22chain%22%3A%22ethereum-mainnet%22%7D"
 ```
 
 **Response:**
@@ -353,9 +388,13 @@ curl "http://localhost:3001/trpc/fee.estimate?input=%7B%22chain%22%3A%22ethereum
 
 ### send.native
 
-**Type:** `mutation`
+**Type:** `mutation` (**admin-only** — requires `Authorization: Bearer $KMS_ADMIN_TOKEN`)
 
-Send native tokens (ETH, BTC, TRX, SOL, etc.).
+Send native tokens (ETH, BTC, TRX, SOL, etc.) from a KMS-managed wallet.
+
+The recommended flow is to identify the source wallet by its on-chain address via `from`. KMS looks up the corresponding DepositAddress or GasWallet in its database, decrypts the mnemonic, derives the private key, and signs internally.
+
+Legacy inputs (`privateKey`, `mnemonic`, `fromIndex`, `fromAddress`) remain accepted as an escape hatch for stateless callers, but should not be used by normal services.
 
 **Input:**
 | Field | Type | Required | Description |
@@ -363,21 +402,23 @@ Send native tokens (ETH, BTC, TRX, SOL, etc.).
 | `chain` | `string` | ✅ | Chain identifier |
 | `to` | `string` | ✅ | Recipient address |
 | `amount` | `string` | ✅ | Amount in human-readable units |
-| `privateKey` | `string` | ❌ | Private key (EVM / TRON / VeChain) |
-| `mnemonic` | `string` | ❌ | Mnemonic (BTC / SOL / Ed25519 chains) |
-| `fromIndex` | `number` | ❌ | HD index of sender (default: `0`) |
-| `fromAddress` | `string` | ❌ | Sender address (UTXO chains) |
+| `from` | `string` | ✅* | Managed wallet address (DepositAddress or GasWallet). *Required unless legacy key material is supplied.* |
 | `changeAddress` | `string` | ❌ | Change address (UTXO chains) |
+| `privateKey` | `string` | ❌ | **Legacy.** Raw private key (EVM / TRON / VeChain). Prefer `from`. |
+| `mnemonic` | `string` | ❌ | **Legacy.** Mnemonic (BTC / SOL / Ed25519 chains). Prefer `from`. |
+| `fromIndex` | `number` | ❌ | **Legacy.** HD index of sender (default: `0`). |
+| `fromAddress` | `string` | ❌ | **Legacy.** Sender address (UTXO chains). |
 
-**curl:**
+**curl (recommended — KMS self-sources the key):**
 ```bash
 curl -X POST http://localhost:3001/trpc/send.native \
+  -H "Authorization: Bearer $KMS_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "chain": "ethereum-mainnet",
     "to": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD58",
     "amount": "0.1",
-    "privateKey": "0x4c0883a6910395b1..."
+    "from": "0xDepositAddressFromKmsDb..."
   }'
 ```
 
@@ -396,9 +437,9 @@ curl -X POST http://localhost:3001/trpc/send.native \
 
 ### send.token
 
-**Type:** `mutation`
+**Type:** `mutation` (**admin-only** — requires `Authorization: Bearer $KMS_ADMIN_TOKEN`)
 
-Send ERC-20 / TRC-20 / SPL tokens.
+Send ERC-20 / TRC-20 / SPL tokens from a KMS-managed wallet. Same semantics as `send.native`: identify the source by `from` address and let KMS resolve the signer internally.
 
 **Input:**
 | Field | Type | Required | Description |
@@ -407,21 +448,23 @@ Send ERC-20 / TRC-20 / SPL tokens.
 | `to` | `string` | ✅ | Recipient address |
 | `amount` | `string` | ✅ | Amount in human-readable units |
 | `contractAddress` | `string` | ✅ | Token contract / mint address |
-| `privateKey` | `string` | ❌ | Private key (EVM / TRON) |
-| `mnemonic` | `string` | ❌ | Mnemonic (SOL) |
-| `fromIndex` | `number` | ❌ | HD index of sender (default: `0`) |
+| `from` | `string` | ✅* | Managed wallet address. *Required unless legacy key material is supplied.* |
 | `decimals` | `number` | ❌ | Token decimals (TRON, default: `6`) |
+| `privateKey` | `string` | ❌ | **Legacy.** Raw private key. Prefer `from`. |
+| `mnemonic` | `string` | ❌ | **Legacy.** Mnemonic. Prefer `from`. |
+| `fromIndex` | `number` | ❌ | **Legacy.** HD index of sender (default: `0`). |
 
 **curl:**
 ```bash
 curl -X POST http://localhost:3001/trpc/send.token \
+  -H "Authorization: Bearer $KMS_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "chain": "ethereum-mainnet",
     "to": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD58",
     "amount": "100",
     "contractAddress": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-    "privateKey": "0x4c0883a6910395b1..."
+    "from": "0xDepositAddressFromKmsDb..."
   }'
 ```
 
@@ -549,6 +592,56 @@ curl -X POST http://localhost:3001/trpc/exchange.createRequest \
 | `BAD_REQUEST` | Minimum deposit amount is X |
 | `INTERNAL_SERVER_ERROR` | Tatum wallet generation / address derivation failed |
 | `INTERNAL_SERVER_ERROR` | TATUM_WEBHOOK_URL is not configured |
+
+---
+
+### sweep.toExchange
+
+**Type:** `mutation` (**admin-only** — requires `Authorization: Bearer $KMS_ADMIN_TOKEN`)
+
+Sweep funds from a DepositAddress to an exchange deposit address, topping up gas from a GasWallet when the deposit address cannot pay fees (e.g. ERC-20 / TRC-20 transfers).
+
+KMS resolves both signing keys internally from `depositAddress` and `gasAddress`. Callers never see private keys.
+
+**Input:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `chain` | `string` | ✅ | Chain identifier |
+| `depositAddress` | `string` | ✅ | Managed DepositAddress to drain |
+| `gasAddress` | `string` | ✅ | Managed GasWallet used to top up gas (when needed) |
+| `exchangeAddress` | `string` | ✅ | Destination (exchange deposit address) |
+| `amount` | `string` | ✅ | Amount to sweep, human-readable units |
+| `contractAddress` | `string` | ❌ | Token contract (omit for native sweep) |
+| `decimals` | `number` | ❌ | Token decimals (TRON, default: `6`) |
+| `depositPrivateKey` | `string` | ❌ | **Legacy.** Explicit private key for the deposit address. |
+| `gasPrivateKey` | `string` | ❌ | **Legacy.** Explicit private key for the gas wallet. |
+
+**curl:**
+```bash
+curl -X POST http://localhost:3001/trpc/sweep.toExchange \
+  -H "Authorization: Bearer $KMS_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chain": "ethereum-mainnet",
+    "depositAddress": "0xDepositFromKmsDb...",
+    "gasAddress": "0xGasWalletFromKmsDb...",
+    "exchangeAddress": "0xExchangeDeposit...",
+    "amount": "125.5",
+    "contractAddress": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+  }'
+```
+
+**Response:**
+```json
+{
+  "result": {
+    "data": {
+      "sweepTxId": "0xabc...",
+      "gasTopUpTxId": "0xdef..."
+    }
+  }
+}
+```
 
 **Flow diagram:**
 ```
@@ -746,7 +839,7 @@ Runtime errors (e.g., RPC node timeout, invalid mnemonic) return HTTP 500 with:
 - **Environment variables** — `TATUM_API_KEY` and `PORT` loaded from `.env`
 - **HTTPS recommended** — deploy behind a TLS-terminating reverse proxy
 
-> **Warning:** The `wallet.derivePrivateKey` and `send.*` endpoints handle sensitive cryptographic material. Always use HTTPS in production and restrict access with authentication middleware.
+> **Warning:** The `wallet.derivePrivateKey`, `send.*`, and `sweep.*` endpoints handle sensitive cryptographic material. They require `KMS_ADMIN_TOKEN` (see [Authentication](#authentication)). Always use HTTPS in production and keep the token in the admin microservice only — never share it with public-facing API / client services.
 
 ---
 
@@ -759,7 +852,8 @@ Runtime errors (e.g., RPC node timeout, invalid mnemonic) return HTTP 500 with:
 | `PORT` | `3001` | HTTP server port |
 | `TATUM_API_KEY` | — | Tatum API key for RPC gateway access |
 | `DATABASE_URL` | — | PostgreSQL connection string |
-| `SECRET` | — | Encryption key for master wallet mnemonics |
+| `SECRET` | — | AES-256-GCM key for master wallet mnemonic encryption |
+| `KMS_ADMIN_TOKEN` | — | Shared secret required by admin procedures (`send.*`, `sweep.*`, `wallet.derivePrivateKey`, `/admin/notifications`). If unset, auth is bypassed with a warning — **set it in production**. |
 | `SALT_ROUNDS` | `10` | PBKDF2 iterations for key derivation |
 | `TATUM_WEBHOOK_URL` | — | URL where Tatum sends deposit notifications |
 | `TATUM_SUBSCRIPTION_NETWORK_TYPE` | `mainnet` | Tatum subscription network type |
@@ -788,14 +882,15 @@ curl -f http://localhost:3001/health || exit 1
 
 ```
 ├── trpc/
-│   ├── init.ts              # tRPC instance + Zod schemas
+│   ├── init.ts              # tRPC instance + Zod schemas + adminProcedure auth
 │   ├── server.ts            # Bun.serve() + fetchRequestHandler
 │   └── routers/
 │       ├── index.ts          # Root appRouter (merges all)
 │       ├── wallet.ts         # wallet.generate, deriveAddress, derivePrivateKey
 │       ├── balance.ts        # balance.native, balance.token
 │       ├── fee.ts            # fee.estimate
-│       ├── send.ts           # send.native, send.token
+│       ├── send.ts           # send.native, send.token (admin-only)
+│       ├── sweep.ts          # sweep.toExchange (admin-only)
 │       ├── tx.ts             # tx.status
 │       └── exchange.ts       # exchange.createRequest
 ├── chains/
@@ -808,6 +903,8 @@ curl -f http://localhost:3001/health || exit 1
 ├── types.ts                  # Shared TypeScript interfaces
 ├── lib/
 │   ├── crypto.ts             # AES-256-GCM mnemonic encryption
+│   ├── walletResolver.ts      # Resolve on-chain address → {mnemonic, index}
+│   ├── sweep.ts              # Sweep orchestration (gas top-up + broadcast)
 │   ├── spotRate.ts           # Tatum Price API spot rate calculation
 │   └── orderId.ts            # Human-readable order ID generator
 ├── gateway.ts                # Tatum RPC URL builder
