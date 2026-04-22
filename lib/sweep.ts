@@ -242,26 +242,40 @@ export async function performSweepToExchange(
         gasCostNative: requiredGas,
       }
     } else {
-      // Native sweep: gas comes from the same balance → subtract fee
-      const sendAmountScaled = depositNativeScaled - requiredGasScaled
-      if (sendAmountScaled <= 0n) {
+      // Native sweep: send exactly the requested amount. The caller is the
+      // source of truth for how much to move (e.g. refundAmount for partial
+      // refunds on OVERPAID, acceptedAmount for the transfer-to-exchange step).
+      //
+      // Gas is paid by the network from the same deposit balance, so we
+      // require `balance >= amount + requiredGas`. The gas top-up step above
+      // has already ensured `balance >= requiredGas`; here we additionally
+      // verify there is room for both the requested amount and the gas.
+      const requestedScaled = toBigScale(amount)
+      if (requestedScaled <= 0n) {
+        return {
+          status: "ERROR",
+          code: "SWEEP_FAILED",
+          message: `Native sweep amount must be positive, got ${amount}`,
+          details: { amount },
+        }
+      }
+      if (depositNativeScaled < requestedScaled + requiredGasScaled) {
         return {
           status: "ERROR",
           code: "INSUFFICIENT_FUNDS",
-          message: `Deposit balance ${depositBalance.balance} is not enough to cover gas ${requiredGas} for native sweep on ${chain}`,
-          details: { balance: depositBalance.balance, requiredGas },
+          message: `Deposit balance ${depositBalance.balance} cannot send ${amount} and cover gas ${requiredGas} on ${chain}`,
+          details: { balance: depositBalance.balance, requiredGas, requested: amount },
         }
       }
-      const sendAmount = fromBigScale(sendAmountScaled)
-      console.log(`[sweep] Sending native amount=${sendAmount} (deposit=${depositBalance.balance} - gas=${requiredGas}) to ${destinationAddress}`)
+      console.log(`[sweep] Sending native amount=${amount} (balance=${depositBalance.balance}, gas reserve=${requiredGas}) to ${destinationAddress}`)
       const result = await sendNative({
         chain,
         privateKey: depositPrivateKey,
         to: destinationAddress,
-        amount: sendAmount,
+        amount,
       })
       console.log(`[sweep] Native sweep sent: ${result.txId}`)
-      return { status: "SWEEP_SENT", txId: result.txId, amount: sendAmount, destination: destinationAddress }
+      return { status: "SWEEP_SENT", txId: result.txId, amount, destination: destinationAddress }
     }
   } catch (err) {
     console.error(`[sweep] Sweep send failed:`, err)

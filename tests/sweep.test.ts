@@ -194,7 +194,8 @@ describe("sweep.toExchange — happy path native", () => {
     const data = await trpcData(res)
     expect(data.status).toBe("SWEEP_SENT")
     expect(data.txId).toBe("0xsweptx111")
-    expect(data.amount).toBe("1.998")
+    // Sweep must send exactly the requested amount (1.5), not "balance - gas".
+    expect(data.amount).toBe("1.5")
     expect(data.destination).toBe("0xKuCoinAddress123")
   })
 
@@ -206,7 +207,7 @@ describe("sweep.toExchange — happy path native", () => {
     expect(call.chain).toBe("ethereum-mainnet")
     expect(call.privateKey).toBe(validNativeInput.depositPrivateKey)
     expect(call.to).toBe("0xKuCoinAddress123")
-    expect(call.amount).toBe("1.998")
+    expect(call.amount).toBe("1.5")
   })
 })
 
@@ -340,8 +341,8 @@ describe("sweep.toExchange — gas fee multiplier", () => {
   })
 
   test("custom multiplier 1.0 uses exact fee estimate", async () => {
-    // 0.0015 > 0.001 * 1.0 → enough gas
-    mockGetBalance.mockResolvedValue({ balance: "0.0015", raw: "1500000000000000" })
+    // gas required = 0.001 * 1.0 = 0.001; balance must cover amount (1.5) + gas.
+    mockGetBalance.mockResolvedValue({ balance: "1.6", raw: "1600000000000000000" })
     mockSendNative.mockResolvedValue({ txId: "0xsweep_exact" })
 
     const res = await handle(trpcMutation("sweep.toExchange", {
@@ -482,6 +483,110 @@ describe("sweep.toExchange — token vs native routing", () => {
   test("routes to sendToken when contractAddress is provided", async () => {
     await handle(trpcMutation("sweep.toExchange", validTokenInput))
     expect(mockSendToken).toHaveBeenCalledTimes(1)
+    expect(mockSendNative).not.toHaveBeenCalled()
+  })
+})
+
+// ─── Regression: partial-refund / exact-amount native sweep ──────────────────
+// Bug: previously, the native branch of performSweepToExchange ignored the
+// `amount` parameter and swept the entire deposit balance minus gas. This
+// broke OVERPAID refunds (where only the excess `received - expected` should
+// be returned) and drained the deposit wallet so the subsequent transfer-to-
+// exchange step had nothing left to send.
+
+describe("sweep.toExchange — native sweep sends requested amount (regression)", () => {
+  beforeEach(() => {
+    mockEstimateFee.mockReset()
+    mockGetBalance.mockReset()
+    mockSendNative.mockReset()
+    mockSendToken.mockReset()
+    mockGetFamily.mockReset()
+
+    mockGetFamily.mockImplementation(() => "evm")
+    mockEstimateFee.mockResolvedValue({ gasLimit: "21000", gasPriceGwei: "20", totalFeeEth: "0.001", maxPriorityFeeGwei: "1" })
+    // Deposit balance (1.5) is ample; we want to confirm only `amount` moves.
+    mockGetBalance.mockResolvedValue({ balance: "1.5", raw: "1500000000000000000" })
+    mockSendNative.mockResolvedValue({ txId: "0xpartialrefund" })
+  })
+
+  test("OVERPAID partial refund: sends exactly the refundAmount, not the full balance", async () => {
+    // Scenario: received 1.3, expected 1.0 → refundAmount = 0.3.
+    // The deposit address holds ~1.3 (1.5 here with some padding). Refund
+    // must send 0.3 and leave 1.0 for the subsequent exchange transfer.
+    const res = await handle(trpcMutation("sweep.toExchange", {
+      ...validNativeInput,
+      amount: "0.3",
+    }))
+    expect(res.status).toBe(200)
+    const data = await trpcData(res)
+    expect(data.status).toBe("SWEEP_SENT")
+    expect(data.amount).toBe("0.3")
+
+    expect(mockSendNative).toHaveBeenCalledTimes(1)
+    const call = mockSendNative.mock.calls[0][0]
+    expect(call.amount).toBe("0.3")
+  })
+
+  test("exact deposit transfer: sends exactly acceptedAmount, not balance - gas", async () => {
+    // Scenario: EXACT classification. acceptedAmount equals fromAmount.
+    const res = await handle(trpcMutation("sweep.toExchange", {
+      ...validNativeInput,
+      amount: "1.0",
+    }))
+    expect(res.status).toBe(200)
+    const data = await trpcData(res)
+    expect(data.status).toBe("SWEEP_SENT")
+    expect(data.amount).toBe("1.0")
+
+    expect(mockSendNative).toHaveBeenCalledTimes(1)
+    expect(mockSendNative.mock.calls[0][0].amount).toBe("1.0")
+  })
+
+  test("UNDERPAID full refund: sends the received amount back to the user", async () => {
+    // Scenario: received 0.5, expected 1.0 → refundAmount = 0.5.
+    // Give the deposit balance a small surplus for gas.
+    mockGetBalance.mockResolvedValue({ balance: "0.51", raw: "510000000000000000" })
+
+    const res = await handle(trpcMutation("sweep.toExchange", {
+      ...validNativeInput,
+      amount: "0.5",
+    }))
+    expect(res.status).toBe(200)
+    const data = await trpcData(res)
+    expect(data.status).toBe("SWEEP_SENT")
+    expect(data.amount).toBe("0.5")
+    expect(mockSendNative.mock.calls[0][0].amount).toBe("0.5")
+  })
+
+  test("INSUFFICIENT_FUNDS when balance cannot cover amount + gas", async () => {
+    // Balance 0.5, gas 0.002, request to send 1.0 → should refuse.
+    mockGetBalance.mockResolvedValue({ balance: "0.5", raw: "500000000000000000" })
+
+    const res = await handle(trpcMutation("sweep.toExchange", {
+      ...validNativeInput,
+      amount: "1.0",
+    }))
+    expect(res.status).toBe(200)
+    const data = await trpcData(res)
+    expect(data.status).toBe("ERROR")
+    expect(data.code).toBe("INSUFFICIENT_FUNDS")
+    expect(data.details).toMatchObject({ requested: "1.0" })
+    expect(mockSendNative).not.toHaveBeenCalled()
+  })
+
+  test("rejects zero amount on native sweep", async () => {
+    const res = await handle(trpcMutation("sweep.toExchange", {
+      ...validNativeInput,
+      amount: "0",
+    }))
+    // Input validation (AmountSchema) may reject this at the Zod boundary;
+    // if it reaches the core, SWEEP_FAILED is returned. Either is acceptable.
+    if (res.status === 200) {
+      const data = await trpcData(res)
+      expect(data.status).toBe("ERROR")
+    } else {
+      expect(res.status).not.toBe(200)
+    }
     expect(mockSendNative).not.toHaveBeenCalled()
   })
 })
