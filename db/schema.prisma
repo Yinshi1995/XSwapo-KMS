@@ -126,6 +126,12 @@ enum GasWalletType {
   AUXILIARY
 }
 
+enum DepositSource {
+  TATUM   // HD wallet via Tatum/local generation (default)
+  KUCOIN  // Static address from KuCoin exchange
+  BINANCE // Static address from Binance exchange
+}
+
 model Coin {
   id        String     @id @default(cuid())
   createdAt DateTime   @default(now())
@@ -180,6 +186,11 @@ model Network {
   /// If set, used as-is when communicating with KuCoin API.
   /// If not set, falls back to lowercase of `chain`.
   kucoinChainCode   String?
+  /// Where deposit addresses come from for this network.
+  /// TATUM (default): HD wallet generation via local crypto libs
+  /// KUCOIN: Static address fetched from KuCoin exchange API
+  /// BINANCE: Static address fetched from Binance exchange API
+  depositSource     DepositSource @default(TATUM)
 
   mappings            CoinNetworkMapping[]
   transactions        Transaction[]

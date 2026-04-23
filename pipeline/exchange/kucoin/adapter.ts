@@ -554,6 +554,59 @@ export class KuCoinExchangeAdapter implements ExchangeProvider {
     }
   }
 
+  // ─── Public: deposit checking for external polling ──────────────────
+
+  /**
+   * Check for deposits matching the given criteria (non-blocking).
+   * Returns the deposit if found, null otherwise.
+   * Used by deposit-poller for KUCOIN-sourced networks.
+   */
+  async checkDeposit(
+    currency: string,
+    network: string,
+    address: string,
+    minAmount?: string,
+    startAt?: number,
+    signal?: AbortSignal,
+  ): Promise<{ amount: string; txId?: string; status: string } | null> {
+    const chain = await this.resolveChainForCurrency(currency.toUpperCase(), network, signal)
+
+    const deposits = await this.client.request<KuCoinDepositList>(
+      "/api/v1/deposits",
+      {
+        method: "GET",
+        params: {
+          currency: currency.toUpperCase(),
+          status: "SUCCESS",
+          ...(startAt ? { startAt } : {}),
+        },
+        signal,
+      },
+    )
+
+    for (const item of deposits.items) {
+      if (item.currency.toUpperCase() !== currency.toUpperCase()) continue
+      if (item.chain.toLowerCase() !== chain.toLowerCase()) continue
+      if (item.address.toLowerCase() !== address.toLowerCase()) continue
+
+      // If minAmount specified, check it matches approximately
+      if (minAmount) {
+        const minNum = Number(minAmount)
+        const itemNum = Number(item.amount)
+        // Allow 1% tolerance for network fees
+        if (itemNum < minNum * 0.99) continue
+      }
+
+      return {
+        amount: item.amount,
+        txId: item.walletTxId,
+        status: item.status,
+      }
+    }
+
+    return null
+  }
+
   // ─── Internal: deposit polling ──────────────────────────────────────
 
   private async waitForDeposit(

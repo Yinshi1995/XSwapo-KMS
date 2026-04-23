@@ -1,4 +1,4 @@
-import db from "../index"
+import db, { DepositSource } from "../index"
 import { generateWallet, deriveAddress } from "../../index"
 import { encryptMnemonic } from "../../lib/crypto"
 
@@ -19,6 +19,8 @@ interface NetworkDef {
   decimals: number
   explorerUrl: string | null
   imageUrl: string | null
+  depositSource?: DepositSource
+  kucoinChainCode?: string
 }
 
 // Unique coins (de-duplicated). A coin that is native on multiple networks
@@ -78,6 +80,7 @@ const COINS: CoinDef[] = [
   { code: "CSPR", name: "Casper",          imageUrl: "https://blockchains.tatum.io/assets/img/casper.svg" },
   { code: "EOS",  name: "EOS",             imageUrl: "https://blockchains.tatum.io/assets/img/eos.svg" },
   { code: "OM",   name: "MANTRA",          imageUrl: "https://blockchains.tatum.io/assets/img/mantra.svg" },
+  { code: "XMR",  name: "Monero",          imageUrl: "https://assets.coingecko.com/coins/images/69/small/monero_logo.png" },
   // Stablecoins (tokens, not native — mapped via TOKEN_MAPPINGS below)
   { code: "USDT", name: "Tether USD",      imageUrl: "https://assets.coingecko.com/coins/images/325/small/Tether.png" },
   { code: "USDC", name: "USD Coin",        imageUrl: "https://assets.coingecko.com/coins/images/6319/small/usdc.png" },
@@ -187,6 +190,9 @@ const NETWORKS: NetworkDef[] = [
   { code: "CSPR",    name: "Casper",              chain: "casper",        tatumWalletSlug: null,        nativeCoinCode: "CSPR", decimals: 9,  explorerUrl: "https://cspr.live",                    imageUrl: "https://blockchains.tatum.io/assets/img/casper.svg" },
   { code: "EOS",     name: "EOS",                 chain: "eos",           tatumWalletSlug: null,        nativeCoinCode: "EOS",  decimals: 4,  explorerUrl: "https://bloks.io",                     imageUrl: "https://blockchains.tatum.io/assets/img/eos.svg" },
   { code: "OM",      name: "MANTRA Chain",        chain: "mantrachain",   tatumWalletSlug: null,              nativeCoinCode: "OM",   decimals: 6,  explorerUrl: "https://explorer.mantrachain.io",      imageUrl: "https://blockchains.tatum.io/assets/img/mantra.svg" },
+
+  // ── Exchange-managed networks (KUCOIN/BINANCE deposit source) ─────────────
+  { code: "XMR",     name: "Monero",              chain: "xmr",           tatumWalletSlug: null,        nativeCoinCode: "XMR",  decimals: 12, explorerUrl: "https://xmrchain.net",                 imageUrl: "https://assets.coingecko.com/coins/images/69/small/monero_logo.png", depositSource: DepositSource.KUCOIN, kucoinChainCode: "xmr" },
 ]
 
 // ─── Seed function ───────────────────────────────────────────────────────────
@@ -252,7 +258,8 @@ export async function seedNetworks() {
         explorerUrl: net.explorerUrl,
         nativeCoin: net.nativeCoinCode,
         imageUrl: net.imageUrl,
-        kucoinChainCode: null,
+        kucoinChainCode: net.kucoinChainCode ?? null,
+        depositSource: net.depositSource ?? DepositSource.TATUM,
       },
     })
     networkIdByCode.set(net.code, row.id)

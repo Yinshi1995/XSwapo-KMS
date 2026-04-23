@@ -1,10 +1,12 @@
-import db, { ExchangeRequestStatus } from "../db/index"
+import db, { DepositSource, ExchangeRequestStatus } from "../db/index"
 import { emitNotification } from "./notifications/emit"
 import { getBalance } from "./kms-local"
 import { decimalGt, toDecimal } from "../lib/decimal"
 import { createSystemLog, getCoinNetworkMapping } from "./helpers"
 import { exchangeRequestInclude, type ExchangeRequestContext } from "./types"
 import { processPolledDeposit } from "./deposit-process"
+import { getExchangeProvider } from "./exchange"
+import type { KuCoinExchangeAdapter } from "./exchange/kucoin/adapter"
 
 let processDeposit: typeof processPolledDeposit = processPolledDeposit
 
@@ -47,6 +49,28 @@ async function markRequestFailed(request: ExchangeRequestContext, reason: string
 async function checkAndProcessDeposit(request: ExchangeRequestContext): Promise<void> {
   const tag = `[deposit-poller:${request.id}]`
   const depositAddress = request.depositAddress!
+  const depositSource = request.fromNetwork.depositSource
+
+  // Route to appropriate deposit checking method based on source
+  switch (depositSource) {
+    case DepositSource.KUCOIN:
+      return checkKuCoinDeposit(request, tag)
+    case DepositSource.BINANCE:
+      // TODO: Implement Binance deposit checking
+      console.warn(`${tag} BINANCE deposit source not yet implemented`)
+      return
+    case DepositSource.TATUM:
+    default:
+      return checkTatumDeposit(request, tag)
+  }
+}
+
+/**
+ * Check deposit via on-chain balance (TATUM source).
+ * Uses RPC to check balance on the deposit address.
+ */
+async function checkTatumDeposit(request: ExchangeRequestContext, tag: string): Promise<void> {
+  const depositAddress = request.depositAddress!
   const mapping = await getCoinNetworkMapping(request.fromCoinId, request.fromNetworkId)
 
   let result: { balance: string }
@@ -69,6 +93,42 @@ async function checkAndProcessDeposit(request: ExchangeRequestContext): Promise<
 
   console.info(`${tag} balance detected: ${result.balance} ${request.fromCoin.code}`)
   await processDeposit(request, result.balance)
+}
+
+/**
+ * Check deposit via KuCoin API (KUCOIN source).
+ * Polls KuCoin deposit history for matching deposits.
+ */
+async function checkKuCoinDeposit(request: ExchangeRequestContext, tag: string): Promise<void> {
+  const depositAddress = request.depositAddress!
+  const provider = getExchangeProvider()
+
+  if (provider.name !== "kucoin") {
+    console.warn(`${tag} KUCOIN deposit source but provider is "${provider.name}" — skipping`)
+    return
+  }
+
+  const kucoinAdapter = provider as KuCoinExchangeAdapter
+  const network = request.fromNetwork.kucoinChainCode || request.fromNetwork.chain.toLowerCase()
+
+  let deposit: { amount: string; txId?: string; status: string } | null
+  try {
+    deposit = await kucoinAdapter.checkDeposit(
+      request.fromCoin.code,
+      network,
+      depositAddress.address,
+      request.fromAmount.toString(),
+      request.createdAt.getTime(),
+    )
+  } catch (err) {
+    console.error(`${tag} KuCoin checkDeposit failed:`, err)
+    return
+  }
+
+  if (!deposit) return
+
+  console.info(`${tag} KuCoin deposit detected: ${deposit.amount} ${request.fromCoin.code} txId=${deposit.txId ?? "N/A"}`)
+  await processDeposit(request, deposit.amount)
 }
 
 async function runPollCycle(): Promise<void> {

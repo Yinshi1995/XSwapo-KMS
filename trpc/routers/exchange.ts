@@ -17,13 +17,14 @@
 import { z } from "zod"
 import { TRPCError } from "@trpc/server"
 import { router, publicProcedure } from "../init"
-import db from "../../db/index"
+import db, { DepositSource } from "../../db/index"
 import { generateWallet, deriveAddress, estimateFee, getFamily } from "../../index"
 import { encryptMnemonic } from "../../lib/crypto"
 import { getSpotRate } from "../../lib/spotRate"
 import { generateOrderId } from "../../lib/orderId"
 import { emitNotification } from "../../pipeline/notifications/emit"
 import { extractFeeNative } from "../../lib/sweep"
+import { getOrCreateDepositAddress } from "../../lib/depositAddress"
 
 // ─── Input schema ────────────────────────────────────────────────────────────
 
@@ -143,64 +144,29 @@ export const exchangeRouter = router({
       // ── Step 2: Determine chain codes ─────────────────────────────────
       const baseChainCode = sourceMapping.tatumChainCode || sourceNetwork.chain
 
-      // ── Step 3: Get or create MasterWallet ────────────────────────────
-      let masterWallet = await db.masterWallet.findUnique({
-        where: { coinId_networkId: { coinId: input.fromCoinId, networkId: input.fromNetworkId } },
+      // ── Step 3-5: Get or create deposit address ────────────────────────
+      // Supports multiple sources: TATUM (HD wallet), KUCOIN, BINANCE (static)
+      const depositAddressResult = await getOrCreateDepositAddress({
+        coinId: input.fromCoinId,
+        networkId: input.fromNetworkId,
+        chainCode: baseChainCode,
+        coinCode: sourceMapping.coin.code,
+        depositSource: sourceNetwork.depositSource,
+        kucoinChainCode: sourceNetwork.kucoinChainCode,
       })
 
-      if (!masterWallet) {
-        // Generate locally via our chain modules (no Tatum REST dependency)
-        const walletData = generateWallet(baseChainCode)
-
-        const surprise = encryptMnemonic(walletData.mnemonic)
-
-        masterWallet = await db.masterWallet.create({
-          data: {
-            coinId: input.fromCoinId,
-            networkId: input.fromNetworkId,
-            xpub: walletData.xpub,
-            surprise,
-            status: "ACTIVE",
-            currentIndex: 0,
-            generatedAddresses: 0,
-          },
-        })
-      }
-
-      // ── Step 4: Derive deposit address ────────────────────────────────
-      const nextIndex = masterWallet.generatedAddresses > 0
-        ? masterWallet.currentIndex + 1
-        : 0
-
-      const addrData = await deriveAddress(masterWallet.xpub, nextIndex, baseChainCode)
-      if (!addrData.address) {
-        fail("Failed to derive deposit address from master wallet XPUB", "INTERNAL_SERVER_ERROR")
-      }
-
-      // ── Step 5: Save DepositAddress + update MasterWallet ─────────────
-      const [depositAddress] = await db.$transaction([
-        db.depositAddress.create({
-          data: {
-            address: addrData.address,
-            index: nextIndex,
-            masterWalletxpub: masterWallet.xpub,
-          },
-        }),
-        db.masterWallet.update({
-          where: { xpub: masterWallet.xpub },
-          data: {
-            currentIndex: nextIndex,
-            generatedAddresses: { increment: 1 },
-          },
-        }),
-      ])
+      // Fetch the DepositAddress record for linking to ExchangeRequest
+      const depositAddress = await db.depositAddress.findUniqueOrThrow({
+        where: { address: depositAddressResult.address },
+      })
 
       // ── Step 5a: Ensure GasWallets for source & destination networks ──
+      // Skip for exchange-managed deposits (KUCOIN/BINANCE) — no sweep needed
       const destChainCode = destNetwork.chain
-      await Promise.all([
-        ensureGasWallet(sourceNetwork.id, baseChainCode),
-        ensureGasWallet(destNetwork.id, destChainCode),
-      ])
+      if (sourceNetwork.depositSource === DepositSource.TATUM) {
+        await ensureGasWallet(sourceNetwork.id, baseChainCode)
+      }
+      await ensureGasWallet(destNetwork.id, destChainCode)
 
       // ── Step 6: Server-side rate calculation ──────────────────────────
       const [fromCoin, toCoin] = await Promise.all([
@@ -241,26 +207,28 @@ export const exchangeRouter = router({
       const fixedFee = grossToAmount * (fixedFeePercent / 100)
 
       // Gas fee for sweep (source network → exchange)
-      // Estimate gas in native coin, then convert to toCoin
+      // Skip for exchange-managed deposits (KUCOIN/BINANCE) — no sweep needed
       let gasFee = 0
-      const sourceNativeCoin = sourceNetwork.nativeCoin?.toUpperCase()
-      if (sourceNativeCoin) {
-        const gasFeeNative = await estimateSweepGasFee(
-          baseChainCode,
-          sourceMapping.contractAddress,
-        )
-        if (gasFeeNative > 0) {
-          // Convert gas fee from native coin to toCoin
-          // Apply 2x multiplier as buffer for gas price fluctuations
-          const bufferedGasFee = gasFeeNative * 2
-          if (sourceNativeCoin === toCoin.code.toUpperCase()) {
-            gasFee = bufferedGasFee
-          } else {
-            try {
-              const gasToToRate = await getSpotRate(sourceNativeCoin, toCoin.code)
-              gasFee = bufferedGasFee * gasToToRate
-            } catch {
-              console.warn(`[exchange.createRequest] Could not convert gas fee ${sourceNativeCoin} → ${toCoin.code}`)
+      if (sourceNetwork.depositSource === DepositSource.TATUM) {
+        const sourceNativeCoin = sourceNetwork.nativeCoin?.toUpperCase()
+        if (sourceNativeCoin) {
+          const gasFeeNative = await estimateSweepGasFee(
+            baseChainCode,
+            sourceMapping.contractAddress,
+          )
+          if (gasFeeNative > 0) {
+            // Convert gas fee from native coin to toCoin
+            // Apply 2x multiplier as buffer for gas price fluctuations
+            const bufferedGasFee = gasFeeNative * 2
+            if (sourceNativeCoin === toCoin.code.toUpperCase()) {
+              gasFee = bufferedGasFee
+            } else {
+              try {
+                const gasToToRate = await getSpotRate(sourceNativeCoin, toCoin.code)
+                gasFee = bufferedGasFee * gasToToRate
+              } catch {
+                console.warn(`[exchange.createRequest] Could not convert gas fee ${sourceNativeCoin} → ${toCoin.code}`)
+              }
             }
           }
         }
