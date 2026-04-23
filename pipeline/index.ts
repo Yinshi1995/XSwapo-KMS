@@ -48,7 +48,7 @@ export async function startPipeline(): Promise<void> {
       payload: {
         service: "kms",
         pollIntervalMs: Number(process.env.DEPOSIT_POLL_INTERVAL_MS ?? 30_000),
-        depositTimeoutHours: Number(process.env.DEPOSIT_TIMEOUT_HOURS ?? 6),
+        depositTimeoutHours: Number(process.env.DEPOSIT_TIMEOUT_HOURS ?? 1),
         txWatcherIntervalMs: Number(process.env.TRANSFER_WATCHER_INTERVAL_MS ?? 30_000),
         appEnv: process.env.APP_ENV ?? process.env.NODE_ENV ?? "development",
       },

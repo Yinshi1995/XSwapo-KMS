@@ -14,7 +14,7 @@ export function __setProcessDepositForTests(fn: typeof processPolledDeposit): vo
 }
 
 const POLL_INTERVAL_MS = Number(process.env.DEPOSIT_POLL_INTERVAL_MS ?? 30_000)
-const DEPOSIT_TIMEOUT_HOURS = Number(process.env.DEPOSIT_TIMEOUT_HOURS ?? 6)
+const DEPOSIT_TIMEOUT_HOURS = Number(process.env.DEPOSIT_TIMEOUT_HOURS ?? 1)
 const POLL_CONCURRENCY = Math.max(1, Number(process.env.DEPOSIT_POLL_CONCURRENCY ?? 2))
 
 const POLL_STATUSES = [ExchangeRequestStatus.CREATED, ExchangeRequestStatus.WAITING_DEPOSIT]
