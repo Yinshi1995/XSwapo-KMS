@@ -14,6 +14,7 @@ import type { ExchangeRequestContext } from "./types"
 export async function processPolledDeposit(
   request: ExchangeRequestContext,
   balance: string,
+  txHash?: string,
 ): Promise<void> {
   const tag = `[poll-process:${request.id}]`
 
@@ -21,6 +22,17 @@ export async function processPolledDeposit(
   if (request.transactions.some(t => t.type === TransactionType.CLIENT_DEPOSIT)) {
     console.info(`${tag} skipped: CLIENT_DEPOSIT already exists`)
     return
+  }
+
+  // Also dedup by txHash if provided (for exchange-managed deposits)
+  if (txHash) {
+    const existingByTxHash = await db.transaction.findUnique({
+      where: { txHash },
+    })
+    if (existingByTxHash) {
+      console.info(`${tag} skipped: transaction with txHash=${txHash} already exists`)
+      return
+    }
   }
 
   const receivedAmount = toDecimal(balance)
@@ -46,8 +58,9 @@ export async function processPolledDeposit(
         confirmedAmount: receivedAmount,
         incomingCoinId: request.fromCoinId,
         networkId: request.fromNetworkId,
+        txHash: txHash ?? null,
         detectedAt: new Date(),
-        rawPayload: { source: "polling", detectedAt: new Date().toISOString() },
+        rawPayload: { source: "polling", detectedAt: new Date().toISOString(), txHash },
       },
     })
 

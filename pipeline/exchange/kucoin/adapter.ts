@@ -560,6 +560,8 @@ export class KuCoinExchangeAdapter implements ExchangeProvider {
    * Check for deposits matching the given criteria (non-blocking).
    * Returns the deposit if found, null otherwise.
    * Used by deposit-poller for KUCOIN-sourced networks.
+   * 
+   * @deprecated Use findMatchingDeposit for exchange-managed deposits (no address filtering)
    */
   async checkDeposit(
     currency: string,
@@ -596,6 +598,57 @@ export class KuCoinExchangeAdapter implements ExchangeProvider {
         // Allow 1% tolerance for network fees
         if (itemNum < minNum * 0.99) continue
       }
+
+      return {
+        amount: item.amount,
+        txId: item.walletTxId,
+        status: item.status,
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Find a matching deposit for exchange-managed networks (like XMR).
+   * Does NOT filter by address — matches by currency, chain, amount, and time.
+   * The caller must check if the returned txId was already processed.
+   */
+  async findMatchingDeposit(
+    currency: string,
+    network: string,
+    expectedAmount: string,
+    createdAfter: number,
+    signal?: AbortSignal,
+  ): Promise<{ amount: string; txId?: string; status: string } | null> {
+    const chain = await this.resolveChainForCurrency(currency.toUpperCase(), network, signal)
+
+    const deposits = await this.client.request<KuCoinDepositList>(
+      "/api/v1/deposits",
+      {
+        method: "GET",
+        params: {
+          currency: currency.toUpperCase(),
+          status: "SUCCESS",
+          startAt: createdAfter,
+        },
+        signal,
+      },
+    )
+
+    const expectedNum = Number(expectedAmount)
+
+    for (const item of deposits.items) {
+      if (item.currency.toUpperCase() !== currency.toUpperCase()) continue
+      if (item.chain.toLowerCase() !== chain.toLowerCase()) continue
+
+      // Check amount matches within 5% tolerance (for network fees)
+      const itemNum = Number(item.amount)
+      const tolerance = expectedNum * 0.05
+      if (Math.abs(itemNum - expectedNum) > tolerance) continue
+
+      // Check deposit was created after the request
+      if (item.createdAt < createdAfter) continue
 
       return {
         amount: item.amount,

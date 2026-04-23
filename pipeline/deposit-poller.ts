@@ -97,10 +97,13 @@ async function checkTatumDeposit(request: ExchangeRequestContext, tag: string): 
 
 /**
  * Check deposit via KuCoin API (KUCOIN source).
- * Polls KuCoin deposit history for matching deposits.
+ * For exchange-managed deposits (like XMR), we match deposits by:
+ * - Currency and chain
+ * - Amount (within tolerance)
+ * - Time (after request creation)
+ * - Not already processed (check txHash in Transaction table)
  */
 async function checkKuCoinDeposit(request: ExchangeRequestContext, tag: string): Promise<void> {
-  const depositAddress = request.depositAddress!
   const provider = getExchangeProvider()
 
   if (provider.name !== "kucoin") {
@@ -113,22 +116,32 @@ async function checkKuCoinDeposit(request: ExchangeRequestContext, tag: string):
 
   let deposit: { amount: string; txId?: string; status: string } | null
   try {
-    deposit = await kucoinAdapter.checkDeposit(
+    deposit = await kucoinAdapter.findMatchingDeposit(
       request.fromCoin.code,
       network,
-      depositAddress.address,
       request.fromAmount.toString(),
       request.createdAt.getTime(),
     )
   } catch (err) {
-    console.error(`${tag} KuCoin checkDeposit failed:`, err)
+    console.error(`${tag} KuCoin findMatchingDeposit failed:`, err)
     return
   }
 
   if (!deposit) return
 
+  // Check if this deposit was already processed (by txId)
+  if (deposit.txId) {
+    const existingTx = await db.transaction.findUnique({
+      where: { txHash: deposit.txId },
+    })
+    if (existingTx) {
+      // Already processed, skip
+      return
+    }
+  }
+
   console.info(`${tag} KuCoin deposit detected: ${deposit.amount} ${request.fromCoin.code} txId=${deposit.txId ?? "N/A"}`)
-  await processDeposit(request, deposit.amount)
+  await processDeposit(request, deposit.amount, deposit.txId)
 }
 
 async function runPollCycle(): Promise<void> {
