@@ -149,22 +149,49 @@ async function getKuCoinDepositAddress(
     }
   }
 
+  // For KUCOIN source, use a special xpub format to distinguish from TATUM wallets
+  const kucoinXpub = `kucoin:${coinCode}:${chain}`
+
+  // Find existing KUCOIN-style wallet by xpub
   let masterWallet = await db.masterWallet.findUnique({
-    where: { coinId_networkId: { coinId, networkId } },
+    where: { xpub: kucoinXpub },
   })
 
   if (!masterWallet) {
-    masterWallet = await db.masterWallet.create({
-      data: {
-        coinId,
-        networkId,
-        xpub: `kucoin:${coinCode}:${chain}`,
-        surprise: null,
-        status: "ACTIVE",
-        currentIndex: 0,
-        generatedAddresses: 0,
-      },
+    // Check for existing wallet with wrong format (TATUM-style)
+    const existingWallet = await db.masterWallet.findUnique({
+      where: { coinId_networkId: { coinId, networkId } },
     })
+
+    if (existingWallet && !existingWallet.xpub.startsWith("kucoin:")) {
+      // Migrate old wallet to KUCOIN format
+      console.warn(
+        `[depositAddress] Migrating MasterWallet ${existingWallet.xpub.slice(0, 30)}... ` +
+        `from TATUM to KUCOIN format for ${coinCode}/${networkId}`
+      )
+      masterWallet = await db.masterWallet.update({
+        where: { xpub: existingWallet.xpub },
+        data: {
+          xpub: kucoinXpub,
+          surprise: null,
+        },
+      })
+    } else if (!existingWallet) {
+      masterWallet = await db.masterWallet.create({
+        data: {
+          coinId,
+          networkId,
+          xpub: kucoinXpub,
+          surprise: null,
+          status: "ACTIVE",
+          currentIndex: 0,
+          generatedAddresses: 0,
+        },
+      })
+    } else {
+      // existingWallet already has kucoin format but different chain?
+      masterWallet = existingWallet
+    }
   }
 
   const depositAddress = await db.depositAddress.create({
