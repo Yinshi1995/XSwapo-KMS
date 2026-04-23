@@ -97,11 +97,10 @@ async function checkTatumDeposit(request: ExchangeRequestContext, tag: string): 
 
 /**
  * Check deposit via KuCoin API (KUCOIN source).
- * For exchange-managed deposits (like XMR), we match deposits by:
- * - Currency and chain
- * - Amount (within tolerance)
- * - Time (after request creation)
- * - Not already processed (check txHash in Transaction table)
+ * For exchange-managed deposits (like XMR), we check the account balance
+ * directly via KuCoin /api/v1/accounts endpoint.
+ * 
+ * Balance check is simpler and more reliable than deposit history matching.
  */
 async function checkKuCoinDeposit(request: ExchangeRequestContext, tag: string): Promise<void> {
   const provider = getExchangeProvider()
@@ -112,36 +111,20 @@ async function checkKuCoinDeposit(request: ExchangeRequestContext, tag: string):
   }
 
   const kucoinAdapter = provider as KuCoinExchangeAdapter
-  const network = request.fromNetwork.kucoinChainCode || request.fromNetwork.chain.toLowerCase()
 
-  let deposit: { amount: string; txId?: string; status: string } | null
+  let balance: string
   try {
-    deposit = await kucoinAdapter.findMatchingDeposit(
-      request.fromCoin.code,
-      network,
-      request.fromAmount.toString(),
-      request.createdAt.getTime(),
-    )
+    // Check balance in "main" account (where deposits land)
+    balance = await kucoinAdapter.getBalance(request.fromCoin.code, "main")
   } catch (err) {
-    console.error(`${tag} KuCoin findMatchingDeposit failed:`, err)
+    console.error(`${tag} KuCoin getBalance failed:`, err)
     return
   }
 
-  if (!deposit) return
+  if (!decimalGt(toDecimal(balance), 0)) return
 
-  // Check if this deposit was already processed (by txId)
-  if (deposit.txId) {
-    const existingTx = await db.transaction.findUnique({
-      where: { txHash: deposit.txId },
-    })
-    if (existingTx) {
-      // Already processed, skip
-      return
-    }
-  }
-
-  console.info(`${tag} KuCoin deposit detected: ${deposit.amount} ${request.fromCoin.code} txId=${deposit.txId ?? "N/A"}`)
-  await processDeposit(request, deposit.amount, deposit.txId)
+  console.info(`${tag} KuCoin balance detected: ${balance} ${request.fromCoin.code}`)
+  await processDeposit(request, balance)
 }
 
 async function runPollCycle(): Promise<void> {

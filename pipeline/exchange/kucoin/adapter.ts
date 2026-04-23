@@ -616,64 +616,6 @@ export class KuCoinExchangeAdapter implements ExchangeProvider {
     return null
   }
 
-  /**
-   * Find a matching deposit for exchange-managed networks (like XMR).
-   * Does NOT filter by address — matches by currency, chain, amount, and time.
-   * The caller must check if the returned txId was already processed.
-   */
-  async findMatchingDeposit(
-    currency: string,
-    network: string,
-    expectedAmount: string,
-    createdAfter: number,
-    signal?: AbortSignal,
-  ): Promise<{ amount: string; txId?: string; status: string } | null> {
-    const chain = await this.resolveChainForCurrency(currency.toUpperCase(), network, signal)
-
-    const deposits = await this.client.request<KuCoinDepositList>(
-      "/api/v1/deposits",
-      {
-        method: "GET",
-        params: {
-          currency: currency.toUpperCase(),
-          status: "SUCCESS",
-          startAt: createdAfter,
-        },
-        signal,
-      },
-    )
-
-    // KuCoin may return empty items array or undefined
-    const items = deposits?.items ?? []
-    if (items.length === 0) {
-      return null
-    }
-
-    const expectedNum = Number(expectedAmount)
-
-    for (const item of items) {
-      if (!item?.currency || !item?.chain) continue
-      if (item.currency.toUpperCase() !== currency.toUpperCase()) continue
-      if (item.chain.toLowerCase() !== chain.toLowerCase()) continue
-
-      // Check amount matches within 5% tolerance (for network fees)
-      const itemNum = Number(item.amount)
-      const tolerance = expectedNum * 0.05
-      if (Math.abs(itemNum - expectedNum) > tolerance) continue
-
-      // Check deposit was created after the request
-      if (item.createdAt < createdAfter) continue
-
-      return {
-        amount: item.amount,
-        txId: item.walletTxId,
-        status: item.status,
-      }
-    }
-
-    return null
-  }
-
   // ─── Internal: deposit polling ──────────────────────────────────────
 
   private async waitForDeposit(
@@ -755,6 +697,39 @@ export class KuCoinExchangeAdapter implements ExchangeProvider {
     }
 
     return null
+  }
+
+  // ─── Public: get account balance ────────────────────────────────────
+
+  /**
+   * Get the available balance for a currency in a specific account type.
+   * Used by deposit-poller for KUCOIN-sourced networks to check deposits.
+   *
+   * @param currency - Currency code (e.g. "XMR", "BTC")
+   * @param accountType - Account type: "main" (deposit), "trade" (spot)
+   * @returns Available balance as string, or "0" if not found
+   */
+  async getBalance(
+    currency: string,
+    accountType: string = "main",
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const accounts = await this.client.request<KuCoinAccount[]>(
+      "/api/v1/accounts",
+      {
+        method: "GET",
+        params: { currency: currency.toUpperCase(), type: accountType },
+        signal,
+      },
+    )
+
+    // KuCoin may return empty array
+    if (!accounts || accounts.length === 0) {
+      return "0"
+    }
+
+    const account = accounts.find((a) => a.type === accountType)
+    return account?.available ?? "0"
   }
 
   // ─── Internal: balance polling ──────────────────────────────────────
