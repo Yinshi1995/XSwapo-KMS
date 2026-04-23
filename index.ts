@@ -76,6 +76,7 @@ export function getFamily(chain: string): ChainFamily {
   if (key.startsWith("MANTRACHAIN")) return "evm"
   if (key.startsWith("SUI")) return "sui"
   if (key.startsWith("TON")) return "ton"
+  if (key.startsWith("MONERO") || key.startsWith("XMR")) return "exchange"
 
   return "evm"
 }
