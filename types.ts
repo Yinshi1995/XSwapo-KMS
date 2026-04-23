@@ -51,6 +51,7 @@ export type ChainFamily =
   | "cosmos"
   | "sui"
   | "ton"
+  | "exchange"  // Exchange-managed coins (XMR, etc.) — no on-chain RPC
 
 // ─── EVM chains ─────────────────────────────────────────────────────────────
 export type EvmChain =

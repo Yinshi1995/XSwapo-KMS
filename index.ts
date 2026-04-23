@@ -45,6 +45,9 @@ const CHAIN_FAMILY_MAP: Record<string, ChainFamily> = {
   COSMOS: "cosmos",  MANTRACHAIN: "evm",
   SUI: "sui",
   TON: "ton",
+  // Exchange-managed coins (no on-chain RPC, use exchange API)
+  MONERO: "exchange",
+  XMR: "exchange",
 }
 
 export function getFamily(chain: string): ChainFamily {
@@ -97,6 +100,8 @@ export function normalizeChain(chain: string): string {
 export function generateWallet(chain: string): ChainWallet {
   chain = normalizeChain(chain)
   switch (getFamily(chain)) {
+    case "exchange":
+      throw new Error(`${chain} is exchange-managed — use exchange API for deposit addresses`)
     case "bitcoin":     return btc.btcGenerateWallet(isTestnet(chain))
     case "litecoin":
     case "dogecoin":
@@ -124,6 +129,8 @@ export function generateWallet(chain: string): ChainWallet {
 export function deriveAddress(xpubOrMnemonic: string, index: number, chain: string): DerivedAddress | Promise<DerivedAddress> {
   chain = normalizeChain(chain)
   switch (getFamily(chain)) {
+    case "exchange":
+      throw new Error(`${chain} is exchange-managed — use exchange API for deposit addresses`)
     case "bitcoin":     return btc.btcDeriveAddress(xpubOrMnemonic, index, isTestnet(chain))
     case "litecoin":
     case "dogecoin":
@@ -150,6 +157,8 @@ export function deriveAddress(xpubOrMnemonic: string, index: number, chain: stri
 export function derivePrivateKey(mnemonic: string, index: number, chain: string): string {
   chain = normalizeChain(chain)
   switch (getFamily(chain)) {
+    case "exchange":
+      throw new Error(`${chain} is exchange-managed — private keys are held by the exchange`)
     case "bitcoin":     return btc.btcDerivePrivateKey(mnemonic, index, isTestnet(chain))
     case "litecoin":
     case "dogecoin":
@@ -176,6 +185,8 @@ export function derivePrivateKey(mnemonic: string, index: number, chain: string)
 export async function getBalance(address: string, chain: string): Promise<Balance> {
   chain = normalizeChain(chain)
   switch (getFamily(chain)) {
+    case "exchange":
+      throw new Error(`${chain} is exchange-managed — use exchange API for balance (e.g. KuCoin /api/v1/accounts)`)
     case "bitcoin":     return btc.btcGetBalance(address, isTestnet(chain))
     case "litecoin":
     case "dogecoin":
@@ -215,6 +226,8 @@ export async function getTokenBalance(
     case "dogecoin":
     case "bitcoincash":
       throw new Error(`${family} does not support tokens`)
+    case "exchange":
+      throw new Error(`${chain} is exchange-managed — use exchange API for token balance`)
     case "xrp":
     case "stellar":
     case "algorand":
@@ -245,6 +258,10 @@ export async function estimateFee(params: {
   const chain = normalizeChain(rawChain)
 
   switch (getFamily(chain)) {
+    case "exchange":
+      // Exchange-managed chains have no on-chain fees for us — exchange handles internally
+      return { fee: "0", raw: "0" } as any
+
     case "bitcoin":
       return btc.btcEstimateFee(isTestnet(chain))
     case "litecoin":
@@ -310,6 +327,9 @@ export async function sendNative(params: {
     ?? (mnemonic ? derivePrivateKey(mnemonic, fromIndex, chain) : undefined)
 
   switch (getFamily(chain)) {
+    case "exchange":
+      throw new Error(`${chain} is exchange-managed — use exchange API for withdrawals`)
+
     case "bitcoin":
       if (!mnemonic) throw new Error("BTC sendNative requires mnemonic")
       return btc.btcSendTransaction({
@@ -413,6 +433,9 @@ export async function sendToken(params: {
     ?? (mnemonic ? derivePrivateKey(mnemonic, fromIndex, chain) : undefined)
 
   switch (family) {
+    case "exchange":
+      throw new Error(`${chain} is exchange-managed — use exchange API for token transfers`)
+
     case "tron":
       if (!privateKey) throw new Error("TRON sendToken requires privateKey")
       return tron.tronSendTrc20({
@@ -445,6 +468,8 @@ export async function sendToken(params: {
 export async function getTxStatus(txId: string, chain: string) {
   chain = normalizeChain(chain)
   switch (getFamily(chain)) {
+    case "exchange":
+      throw new Error(`${chain} is exchange-managed — use exchange API for transaction status`)
     case "bitcoin":     return btc.btcGetTxStatus(txId, isTestnet(chain))
     case "litecoin":
     case "dogecoin":
