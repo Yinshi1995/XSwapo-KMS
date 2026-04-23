@@ -18,11 +18,12 @@ import { z } from "zod"
 import { TRPCError } from "@trpc/server"
 import { router, publicProcedure } from "../init"
 import db from "../../db/index"
-import { generateWallet, deriveAddress } from "../../index"
+import { generateWallet, deriveAddress, estimateFee, getFamily } from "../../index"
 import { encryptMnemonic } from "../../lib/crypto"
 import { getSpotRate } from "../../lib/spotRate"
 import { generateOrderId } from "../../lib/orderId"
 import { emitNotification } from "../../pipeline/notifications/emit"
+import { extractFeeNative } from "../../lib/sweep"
 
 // ─── Input schema ────────────────────────────────────────────────────────────
 
@@ -41,6 +42,32 @@ const CreateExchangeRequestInput = z.object({
 
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message })
+}
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
+/**
+ * Estimate sweep gas fee for a network. Returns fee in native coin units.
+ * Uses a proxy address pair for estimation since deposit address doesn't exist yet.
+ */
+async function estimateSweepGasFee(
+  chainCode: string,
+  contractAddress: string | null,
+): Promise<number> {
+  try {
+    const family = getFamily(chainCode)
+    const feeData = await estimateFee({
+      chain: chainCode,
+      from: ZERO_ADDRESS,
+      to: ZERO_ADDRESS,
+      contractAddress: contractAddress ?? undefined,
+    })
+    const feeNative = extractFeeNative(feeData, family)
+    return parseFloat(feeNative) || 0
+  } catch (err) {
+    console.warn(`[exchange.createRequest] Gas estimation failed for ${chainCode}:`, err)
+    return 0
+  }
 }
 
 /** Ensure a GasWallet exists for the given network; create one if missing. */
@@ -204,9 +231,46 @@ export const exchangeRouter = router({
 
       // Calculate fee & final amount
       const grossToAmount = fromAmount * serverRate
-      const feePercent = Number(toCoin.floatFeePercent)
-      const calculatedFee = grossToAmount * (feePercent / 100)
+
+      // Float fee (our commission) — percentage of gross amount
+      const floatFeePercent = Number(toCoin.floatFeePercent)
+      const floatFee = grossToAmount * (floatFeePercent / 100)
+
+      // Fixed fee (external/exchange commission) — percentage of gross amount
+      const fixedFeePercent = Number(toCoin.fixedFeePercent)
+      const fixedFee = grossToAmount * (fixedFeePercent / 100)
+
+      // Gas fee for sweep (source network → exchange)
+      // Estimate gas in native coin, then convert to toCoin
+      let gasFee = 0
+      const sourceNativeCoin = sourceNetwork.nativeCoin?.toUpperCase()
+      if (sourceNativeCoin) {
+        const gasFeeNative = await estimateSweepGasFee(
+          baseChainCode,
+          sourceMapping.contractAddress,
+        )
+        if (gasFeeNative > 0) {
+          // Convert gas fee from native coin to toCoin
+          // Apply 2x multiplier as buffer for gas price fluctuations
+          const bufferedGasFee = gasFeeNative * 2
+          if (sourceNativeCoin === toCoin.code.toUpperCase()) {
+            gasFee = bufferedGasFee
+          } else {
+            try {
+              const gasToToRate = await getSpotRate(sourceNativeCoin, toCoin.code)
+              gasFee = bufferedGasFee * gasToToRate
+            } catch {
+              console.warn(`[exchange.createRequest] Could not convert gas fee ${sourceNativeCoin} → ${toCoin.code}`)
+            }
+          }
+        }
+      }
+
+      // Minimum fee floor
       const minFee = Number(toCoin.minimumFee)
+
+      // Total fee: max(float + fixed + gas, minFee)
+      const calculatedFee = floatFee + fixedFee + gasFee
       const feeAmount = Math.max(calculatedFee, minFee)
       const serverToAmount = grossToAmount - feeAmount
 
@@ -276,6 +340,12 @@ export const exchangeRouter = router({
         toAmount: Number(exchangeRequest.toAmount),
         estimatedRate: Number(exchangeRequest.estimatedRate),
         feeAmount: Number(exchangeRequest.feeAmount),
+        feeBreakdown: {
+          floatFee: parseFloat(floatFee.toFixed(8)),
+          fixedFee: parseFloat(fixedFee.toFixed(8)),
+          gasFee: parseFloat(gasFee.toFixed(8)),
+          minFee: minFee,
+        },
         status: exchangeRequest.status,
       }
     }),
