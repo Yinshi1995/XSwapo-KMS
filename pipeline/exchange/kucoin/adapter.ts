@@ -586,7 +586,14 @@ export class KuCoinExchangeAdapter implements ExchangeProvider {
       },
     )
 
-    for (const item of deposits.items) {
+    // KuCoin may return empty items array or undefined
+    const items = deposits?.items ?? []
+    if (items.length === 0) {
+      return null
+    }
+
+    for (const item of items) {
+      if (!item?.currency || !item?.chain || !item?.address) continue
       if (item.currency.toUpperCase() !== currency.toUpperCase()) continue
       if (item.chain.toLowerCase() !== chain.toLowerCase()) continue
       if (item.address.toLowerCase() !== address.toLowerCase()) continue
@@ -636,9 +643,16 @@ export class KuCoinExchangeAdapter implements ExchangeProvider {
       },
     )
 
+    // KuCoin may return empty items array or undefined
+    const items = deposits?.items ?? []
+    if (items.length === 0) {
+      return null
+    }
+
     const expectedNum = Number(expectedAmount)
 
-    for (const item of deposits.items) {
+    for (const item of items) {
+      if (!item?.currency || !item?.chain) continue
       if (item.currency.toUpperCase() !== currency.toUpperCase()) continue
       if (item.chain.toLowerCase() !== chain.toLowerCase()) continue
 
