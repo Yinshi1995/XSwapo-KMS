@@ -1,7 +1,7 @@
 import db, { DepositSource, ExchangeRequestStatus } from "../db/index"
 import { emitNotification } from "./notifications/emit"
 import { getBalance } from "./kms-local"
-import { decimalGt, toDecimal, decimalMinus } from "../lib/decimal"
+import { decimalGt, toDecimal, decimalSub } from "../lib/decimal"
 import { createSystemLog, getCoinNetworkMapping } from "./helpers"
 import { exchangeRequestInclude, type ExchangeRequestContext } from "./types"
 import { processPolledDeposit } from "./deposit-process"
@@ -131,7 +131,7 @@ async function checkKuCoinDeposit(request: ExchangeRequestContext, tag: string):
     return
   }
 
-  const delta = decimalMinus(toDecimal(balance), request.lastKnownBalance)
+  const delta = decimalSub(toDecimal(balance), request.lastKnownBalance)
   if (!decimalGt(delta, 0)) return
 
   const depositAmount = delta.toFixed()
