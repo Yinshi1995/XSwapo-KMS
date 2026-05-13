@@ -1,7 +1,7 @@
 import db, { DepositSource, ExchangeRequestStatus } from "../db/index"
 import { emitNotification } from "./notifications/emit"
 import { getBalance } from "./kms-local"
-import { decimalGt, toDecimal } from "../lib/decimal"
+import { decimalGt, toDecimal, decimalMinus } from "../lib/decimal"
 import { createSystemLog, getCoinNetworkMapping } from "./helpers"
 import { exchangeRequestInclude, type ExchangeRequestContext } from "./types"
 import { processPolledDeposit } from "./deposit-process"
@@ -121,10 +121,30 @@ async function checkKuCoinDeposit(request: ExchangeRequestContext, tag: string):
     return
   }
 
-  if (!decimalGt(toDecimal(balance), 0)) return
+  // First poll: snapshot the current balance as baseline and wait for an increase.
+  if (request.lastKnownBalance == null) {
+    await db.exchangeRequest.update({
+      where: { id: request.id },
+      data: { lastKnownBalance: balance },
+    })
+    console.info(`${tag} KuCoin baseline snapshot: ${balance} ${request.fromCoin.code}`)
+    return
+  }
 
-  console.info(`${tag} KuCoin balance detected: ${balance} ${request.fromCoin.code}`)
-  await processDeposit(request, balance)
+  const delta = decimalMinus(toDecimal(balance), request.lastKnownBalance)
+  if (!decimalGt(delta, 0)) return
+
+  const depositAmount = delta.toFixed()
+  console.info(
+    `${tag} KuCoin deposit detected: +${depositAmount} ${request.fromCoin.code} (balance ${request.lastKnownBalance} → ${balance})`,
+  )
+
+  await db.exchangeRequest.update({
+    where: { id: request.id },
+    data: { lastKnownBalance: balance },
+  })
+
+  await processDeposit(request, depositAmount)
 }
 
 async function runPollCycle(): Promise<void> {

@@ -341,6 +341,10 @@ model ExchangeRequest {
   estimatedRate Decimal?
   feeAmount     Decimal  @default(0)
 
+  /// Baseline balance for exchange-managed deposits (e.g. XMR via KuCoin).
+  /// Set on first poll; deposit is detected as an increase above this value.
+  lastKnownBalance Decimal?
+
   /// Итог обработки заявки
   completedAt  DateTime?
   failedReason String?
