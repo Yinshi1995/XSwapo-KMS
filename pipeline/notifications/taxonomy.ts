@@ -25,6 +25,7 @@ export const EVENT_DEFINITIONS: Record<EventType, EventDefinition> = {
   "deposit.underpaid":            { severity: "warning",  category: "deposit",     routing: BOTH },
   "deposit.overpaid":             { severity: "warning",  category: "deposit",     routing: BOTH },
   "deposit.expired":              { severity: "warning",  category: "deposit",     routing: BOTH },
+  "deposit.external":             { severity: "success",  category: "deposit",     routing: BOTH },
 
   // ── Withdrawals ──
   "withdrawal.requested":         { severity: "info",     category: "withdrawal",  routing: REDIS_ONLY },

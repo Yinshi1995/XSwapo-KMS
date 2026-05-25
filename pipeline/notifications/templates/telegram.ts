@@ -32,6 +32,7 @@ const EVENT_TITLE: Record<EventType, string> = {
   "deposit.underpaid":          "Deposit Underpaid",
   "deposit.overpaid":           "Deposit Overpaid",
   "deposit.expired":            "Deposit Expired",
+  "deposit.external":           "External Deposit Detected",
   "withdrawal.requested":       "Withdrawal Requested",
   "withdrawal.approved":        "Withdrawal Approved",
   "withdrawal.sent":            "Withdrawal Sent",
@@ -72,6 +73,10 @@ const EVENT_TITLE: Record<EventType, string> = {
 // ─── Next-action hints per event type ────────────────────────────────
 
 const ACTION_HINTS: Partial<Record<EventType, string[]>> = {
+  "deposit.external": [
+    "Verify this deposit is expected.",
+    "Check KuCoin funding account balance.",
+  ],
   "deposit.underpaid": [
     "Review exchange request and decide whether to accept or refund.",
   ],

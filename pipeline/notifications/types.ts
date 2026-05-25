@@ -29,6 +29,7 @@ export type EventType =
   | "deposit.underpaid"
   | "deposit.overpaid"
   | "deposit.expired"
+  | "deposit.external"   // deposit to KuCoin funding account not linked to an exchange request
   // Withdrawals
   | "withdrawal.requested"
   | "withdrawal.approved"

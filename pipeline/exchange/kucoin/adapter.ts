@@ -702,6 +702,33 @@ export class KuCoinExchangeAdapter implements ExchangeProvider {
   // ─── Public: get account balance ────────────────────────────────────
 
   /**
+   * Fetch recent successful deposits for a currency since a given timestamp.
+   * Used by kucoin-wallet-monitor to identify deposit source (chain, txId, fromAddress).
+   *
+   * @param currency - Currency code (e.g. "XMR", "BTC")
+   * @param startAtMs - Epoch milliseconds; only deposits created after this time are returned
+   */
+  async getRecentDeposits(
+    currency: string,
+    startAtMs: number,
+    signal?: AbortSignal,
+  ): Promise<KuCoinDepositItem[]> {
+    const data = await this.client.request<KuCoinDepositList>(
+      "/api/v1/deposits",
+      {
+        method: "GET",
+        params: {
+          currency: currency.toUpperCase(),
+          status: "SUCCESS",
+          startAt: startAtMs,
+        },
+        signal,
+      },
+    )
+    return data?.items ?? []
+  }
+
+  /**
    * Get the available balance for a currency in a specific account type.
    * Used by deposit-poller for KUCOIN-sourced networks to check deposits.
    *
