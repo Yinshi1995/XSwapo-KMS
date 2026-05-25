@@ -1,16 +1,15 @@
 /**
- * KuCoinWalletMonitor — polls ALL KuCoin-sourced wallets registered in the DB
- * for balance changes and emits `deposit.external` notifications with full
- * source context (chain, txId, fromAddress, isInner).
+ * KuCoinWalletMonitor — polls KuCoin deposit history for all tracked currencies
+ * and emits `deposit.external` notifications for each new incoming transaction.
  *
- * Distinct from deposit-poller, which only watches addresses tied to active
- * ExchangeRequest records. This monitor covers:
- *   - Standalone top-ups to the KuCoin funding account
- *   - Internal KuCoin transfers
- *   - Any deposit that arrives outside of an open exchange request
+ * Detection strategy: transaction-based (not balance-based).
+ * Polls GET /api/v1/deposits?currency=X&status=SUCCESS&startAt=T on each cycle.
+ * Any deposit with an unseen walletTxId triggers a notification.
  *
- * Balance snapshots are held in memory. On restart the first cycle re-establishes
- * the baseline without firing notifications.
+ * Advantages over balance-diff approach:
+ *   - Catches multiple deposits in one interval independently
+ *   - Not confused by concurrent withdrawals cancelling out the delta
+ *   - Exact per-deposit amount, chain, fromAddress, txHash
  *
  * Env vars:
  *   KUCOIN_WALLET_MONITOR_INTERVAL_MS  (default 60 000)
@@ -21,21 +20,16 @@ import db from "../db/index"
 import { emitNotification } from "./notifications/emit"
 import { getExchangeProvider } from "./exchange"
 import type { KuCoinExchangeAdapter } from "./exchange/kucoin/adapter"
-import type { KuCoinDepositItem } from "./exchange/kucoin/types"
-import { toDecimal, decimalGt, decimalSub } from "../lib/decimal"
 
 const POLL_INTERVAL_MS = Number(process.env.KUCOIN_WALLET_MONITOR_INTERVAL_MS ?? 60_000)
-// Re-read tracked currencies from DB every 5 minutes
 const CURRENCY_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
-// ─── State ───────────────────────────────────────────────────────────────────
+// ─── State ────────────────────────────────────────────────────────────────────
 
-interface Snapshot {
-  balance: string     // last known balance (string decimal)
-  lastCheckMs: number // epoch ms of last successful poll
-}
+/** epoch ms of last successful deposit check per currency */
+const lastCheckMs = new Map<string, number>()
 
-const snapshots = new Map<string, Snapshot>()
+/** walletTxIds we have already notified about (survives within one process lifetime) */
 const seenTxIds = new Set<string>()
 
 let cachedCurrencies: string[] = []
@@ -75,22 +69,6 @@ async function getTrackedCurrencies(): Promise<string[]> {
   return cachedCurrencies
 }
 
-// ─── Deposit matching ─────────────────────────────────────────────────────────
-
-function findMatchingDeposits(
-  deposits: KuCoinDepositItem[],
-  deltaStr: string,
-): KuCoinDepositItem[] {
-  const delta = Number(deltaStr)
-  return deposits.filter((d) => {
-    if (d.status !== "SUCCESS") return false
-    if (seenTxIds.has(d.walletTxId)) return false
-    const amt = Number(d.amount)
-    // Allow 1% tolerance for rounding / fee deduction
-    return delta > 0 && Math.abs(amt - delta) / delta <= 0.01
-  })
-}
-
 // ─── Per-currency poll ────────────────────────────────────────────────────────
 
 async function pollCurrency(
@@ -98,78 +76,49 @@ async function pollCurrency(
   adapter: KuCoinExchangeAdapter,
   now: number,
 ): Promise<void> {
-  const balance = await adapter.getBalance(currency, "main")
-  const snap = snapshots.get(currency)
+  const since = lastCheckMs.get(currency)
 
-  // First poll — establish baseline, do not notify
-  if (!snap) {
-    snapshots.set(currency, { balance, lastCheckMs: now })
-    console.info(`[kucoin-monitor] ${currency} baseline established: ${balance}`)
+  if (since === undefined) {
+    // First poll — record current time as cursor, fetch nothing
+    // (avoids replaying old history on startup)
+    lastCheckMs.set(currency, now)
+    console.info(`[kucoin-monitor] ${currency} cursor initialised at ${new Date(now).toISOString()}`)
     return
   }
 
-  const delta = decimalSub(toDecimal(balance), toDecimal(snap.balance))
+  const deposits = await adapter.getRecentDeposits(currency, since)
 
-  // Update last-check time regardless of balance change
-  snapshots.set(currency, { balance, lastCheckMs: now })
+  // Advance cursor regardless of results
+  lastCheckMs.set(currency, now)
 
-  if (!decimalGt(delta, 0)) return
-
-  const deltaStr = delta.toFixed()
-  console.info(
-    `[kucoin-monitor] ${currency} balance increased: ${snap.balance} → ${balance} (+${deltaStr})`,
+  const fresh = deposits.filter(
+    (d) => d.status === "SUCCESS" && d.walletTxId && !seenTxIds.has(d.walletTxId),
   )
 
-  // Fetch deposit history to identify source
-  let deposits: KuCoinDepositItem[] = []
-  try {
-    deposits = await adapter.getRecentDeposits(currency, snap.lastCheckMs)
-  } catch (err) {
-    console.warn(`[kucoin-monitor] failed to fetch deposit history for ${currency}:`, err)
-  }
+  if (fresh.length === 0) return
 
-  const matched = findMatchingDeposits(deposits, deltaStr)
+  console.info(`[kucoin-monitor] ${currency}: ${fresh.length} new deposit(s)`)
 
-  if (matched.length > 0) {
-    for (const dep of matched) {
-      seenTxIds.add(dep.walletTxId)
-      const summary = `+${dep.amount} ${currency} on KuCoin${dep.isInner ? " (internal transfer)" : ""}`
-      await emitNotification("deposit.external", {
-        correlationId: dep.walletTxId || crypto.randomUUID(),
-        summary,
-        payload: {
-          currency,
-          amount: dep.amount,
-          chain: dep.chain,
-          txHash: dep.walletTxId,       // "Tx" field in Telegram template
-          fromAddress: dep.address || undefined,
-          isInner: dep.isInner,
-          memo: dep.memo || undefined,
-          fee: dep.fee || undefined,
-          balanceBefore: snap.balance,
-          balanceAfter: balance,
-        },
-      })
-      console.info(
-        `[kucoin-monitor] deposit.external emitted: ${currency} +${dep.amount} txId=${dep.walletTxId} chain=${dep.chain}`,
-      )
-    }
-  } else {
-    // No matching deposit in history — could be API lag or internal ledger move
-    // Still notify so operators are aware
+  for (const dep of fresh) {
+    seenTxIds.add(dep.walletTxId)
+
     await emitNotification("deposit.external", {
-      correlationId: crypto.randomUUID(),
-      summary: `+${deltaStr} ${currency} on KuCoin (source not yet in deposit history)`,
+      correlationId: dep.walletTxId || crypto.randomUUID(),
+      summary: `+${dep.amount} ${currency} on KuCoin${dep.isInner ? " (internal transfer)" : ""}`,
       payload: {
         currency,
-        amount: deltaStr,
-        balanceBefore: snap.balance,
-        balanceAfter: balance,
-        sourceUnknown: true,
+        amount: dep.amount,
+        chain: dep.chain,
+        txHash: dep.walletTxId,
+        fromAddress: dep.address || undefined,
+        isInner: dep.isInner,
+        memo: dep.memo || undefined,
+        fee: dep.fee || undefined,
       },
     })
-    console.warn(
-      `[kucoin-monitor] ${currency} delta=+${deltaStr} but no matching deposit found — API lag?`,
+
+    console.info(
+      `[kucoin-monitor] deposit.external: ${currency} +${dep.amount} chain=${dep.chain} txHash=${dep.walletTxId}`,
     )
   }
 }
@@ -210,7 +159,6 @@ export class KuCoinWalletMonitor {
     const adapter = provider as KuCoinExchangeAdapter
     console.info(`[kucoin-monitor] starting, interval=${POLL_INTERVAL_MS}ms`)
 
-    // Kick off immediately; subsequent cycles on interval
     this.tick(adapter)
     this.intervalId = setInterval(() => this.tick(adapter), POLL_INTERVAL_MS)
   }
