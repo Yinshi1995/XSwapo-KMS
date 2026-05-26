@@ -105,18 +105,25 @@ export async function evmEstimateGas(params: {
   if (valueEth) tx.value = "0x" + BigInt(Math.round(Number(valueEth) * 1e18)).toString(16)
   if (data) tx.data = data
 
-  const [gasHex, priceHex, tip] = await Promise.all([
+  const [gasHex, priceHex, tip, block] = await Promise.all([
     rpc<string>(chain, "eth_estimateGas", [tx]),
     rpc<string>(chain, "eth_gasPrice", []),
     rpc<string>(chain, "eth_maxPriorityFeePerGas", []).catch(() => "0x0"),
+    rpc<{ baseFeePerGas?: string }>(chain, "eth_getBlockByNumber", ["latest", false]).catch(() => null),
   ])
   const gasLimit = BigInt(gasHex)
   const gasPrice = BigInt(priceHex)
+  const tipBig = BigInt(tip)
+  // Mirror ethers.js EIP-1559 fee calculation: maxFeePerGas = baseFee * 2 + priorityFee
+  // This ensures sweep deductions match what sendNative actually pays.
+  const baseFee = block?.baseFeePerGas ? BigInt(block.baseFeePerGas) : gasPrice
+  const maxFeePerGas = baseFee * 2n + tipBig
+  const effectivePrice = maxFeePerGas > gasPrice ? maxFeePerGas : gasPrice
   return {
     gasLimit: gasLimit.toString(),
     gasPriceGwei: formatUnits(gasPrice, "gwei"),
-    totalFeeEth: formatEther(gasLimit * gasPrice),
-    maxPriorityFeeGwei: formatUnits(BigInt(tip), "gwei"),
+    totalFeeEth: formatEther(gasLimit * effectivePrice),
+    maxPriorityFeeGwei: formatUnits(tipBig, "gwei"),
   }
 }
 
