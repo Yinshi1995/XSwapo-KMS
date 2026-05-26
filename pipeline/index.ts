@@ -13,6 +13,7 @@
 
 import { depositPoller } from "./deposit-poller"
 import { kuCoinWalletMonitor } from "./kucoin-wallet-monitor"
+import { txDepositPoller } from "./tx-deposit-poller"
 import { emitNotification } from "./notifications/emit"
 import { pipeline as notificationPipeline } from "./notifications/pipeline"
 import { startTransferWatcher, stopTransferWatcher } from "./transfer-watcher"
@@ -35,10 +36,11 @@ export async function startPipeline(): Promise<void> {
   }
 
   depositPoller.start()
+  txDepositPoller.start()
   kuCoinWalletMonitor.start()
   startTransferWatcher()
 
-  console.info("[pipeline] started (deposit poller + kucoin wallet monitor + transfer watcher + notifications)")
+  console.info("[pipeline] started (deposit poller + tx deposit poller + kucoin wallet monitor + transfer watcher + notifications)")
 
   // Fire-and-forget startup event so operators see a heartbeat in Telegram
   // every time the pipeline comes online. Routes to Telegram only (see
@@ -63,6 +65,7 @@ export async function stopPipeline(): Promise<void> {
   started = false
 
   depositPoller.stop()
+  txDepositPoller.stop()
   kuCoinWalletMonitor.stop()
   stopTransferWatcher()
 
@@ -79,6 +82,7 @@ export async function stopPipeline(): Promise<void> {
 }
 
 export { depositPoller } from "./deposit-poller"
+export { txDepositPoller } from "./tx-deposit-poller"
 export { kuCoinWalletMonitor } from "./kucoin-wallet-monitor"
 export { startTransferWatcher, stopTransferWatcher } from "./transfer-watcher"
 export { pipeline as notificationPipeline } from "./notifications/pipeline"

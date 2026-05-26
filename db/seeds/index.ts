@@ -4,6 +4,7 @@
 // import { seedTransactions } from "./transactions"
 // import { seedNetworks } from "./networks"
 import { seedKucoinChains } from "./update-kucoin-chains"
+import { seedChainFamilies } from "./update-chain-families"
 
 const seed = async () => {
   // await seedNetworks()
@@ -13,6 +14,7 @@ const seed = async () => {
   // await seedExchangeRequests()
   // await seedTransactions()
   await seedKucoinChains()
+  await seedChainFamilies()
 }
 
 export default seed

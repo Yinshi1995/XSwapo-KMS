@@ -7,6 +7,8 @@ import { exchangeRequestInclude, type ExchangeRequestContext } from "./types"
 import { processPolledDeposit } from "./deposit-process"
 import { getExchangeProvider } from "./exchange"
 import type { KuCoinExchangeAdapter } from "./exchange/kucoin/adapter"
+import { getFamily } from "../index"
+import { TX_POLLING_FAMILIES } from "./tx-deposit-poller"
 
 let processDeposit: typeof processPolledDeposit = processPolledDeposit
 
@@ -60,8 +62,12 @@ async function checkAndProcessDeposit(request: ExchangeRequestContext): Promise<
       console.warn(`${tag} BINANCE deposit source not yet implemented`)
       return
     case DepositSource.TATUM:
-    default:
+    default: {
+      // Chains in TX_POLLING_FAMILIES are handled by TxDepositPoller — skip here
+      const family = request.fromNetwork.chainFamily ?? getFamily(request.fromNetwork.chain)
+      if (TX_POLLING_FAMILIES.has(family)) return
       return checkTatumDeposit(request, tag)
+    }
   }
 }
 

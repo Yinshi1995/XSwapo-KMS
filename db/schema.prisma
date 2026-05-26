@@ -186,6 +186,9 @@ model Network {
   /// If set, used as-is when communicating with KuCoin API.
   /// If not set, falls back to lowercase of `chain`.
   kucoinChainCode   String?
+  /// Chain family identifier (e.g. "evm", "bitcoin", "tron", "solana").
+  /// Used by deposit pollers to select the correct scanning strategy.
+  chainFamily       String?   @map("chainfamily")
   /// Where deposit addresses come from for this network.
   /// TATUM (default): HD wallet generation via local crypto libs
   /// KUCOIN: Static address fetched from KuCoin exchange API
