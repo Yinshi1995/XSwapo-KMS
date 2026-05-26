@@ -303,12 +303,20 @@ export async function performSweepToExchange(
         }
       }
       if (depositNativeScaled < requestedScaled + requiredGasScaled) {
-        return {
-          status: "ERROR",
-          code: "INSUFFICIENT_FUNDS",
-          message: `Deposit balance ${depositBalance.balance} cannot send ${amount} and cover gas ${requiredGas} on ${chain}`,
-          details: { balance: depositBalance.balance, requiredGas, requested: amount },
+        // Balance covers gas but not (amount + gas): this happens when the
+        // caller passes the full deposited amount. Reduce to balance - gas.
+        const reducedScaled = depositNativeScaled - requiredGasScaled
+        if (reducedScaled <= 0n) {
+          return {
+            status: "ERROR",
+            code: "INSUFFICIENT_FUNDS",
+            message: `Deposit balance ${depositBalance.balance} is too small to cover gas ${requiredGas} on ${chain}`,
+            details: { balance: depositBalance.balance, requiredGas, requested: amount },
+          }
         }
+        const reduced = fromBigScale(reducedScaled)
+        console.log(`[sweep] Reducing send amount from ${amount} to ${reduced} to cover gas (balance=${depositBalance.balance}, gas=${requiredGas})`)
+        amount = reduced
       }
       console.log(`[sweep] Sending native amount=${amount} (balance=${depositBalance.balance}, gas reserve=${requiredGas}) to ${destinationAddress}`)
       const result = await sendNative({
