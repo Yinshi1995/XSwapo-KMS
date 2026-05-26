@@ -15,6 +15,7 @@ export async function processPolledDeposit(
   request: ExchangeRequestContext,
   balance: string,
   txHash?: string,
+  fromAddress?: string | null,
 ): Promise<void> {
   const tag = `[poll-process:${request.id}]`
 
@@ -54,6 +55,8 @@ export async function processPolledDeposit(
         status: TransactionStatus.DETECTED,
         direction: "IN",
         toAddress: request.depositAddress!.address,
+        senderAddress: fromAddress ?? null,
+        fromAddress: fromAddress ?? null,
         amount: receivedAmount,
         confirmedAmount: receivedAmount,
         incomingCoinId: request.fromCoinId,
@@ -130,6 +133,7 @@ export async function processPolledDeposit(
       network: request.fromNetwork.code,
       chain: request.fromNetwork.chain,
       classification: classification.kind,
+      fromAddress: fromAddress ?? undefined,
       depositAddress: request.depositAddress!.address,
       depositAddressId: request.depositAddress!.id,
       status: nextStatus,

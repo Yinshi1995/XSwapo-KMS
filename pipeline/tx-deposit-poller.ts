@@ -1234,7 +1234,7 @@ async function runTxPollCycle(): Promise<void> {
       // Process each found deposit sequentially to avoid race conditions
       for (const dep of deposits) {
         try {
-          await processPolledDeposit(dep.request, dep.amount, dep.txHash)
+          await processPolledDeposit(dep.request, dep.amount, dep.txHash, dep.fromAddress)
         } catch (err) {
           console.error(
             `[tx-poller] processPolledDeposit failed for ${dep.request.id} txHash=${dep.txHash}:`,

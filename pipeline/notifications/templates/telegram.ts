@@ -212,7 +212,7 @@ function buildFinancialBlock(p: Record<string, unknown>): string[] {
   }
 
   if (p.fromAddress) {
-    lines.push(field("From", code(maskAddress(String(p.fromAddress)))))
+    lines.push(field("From", code(String(p.fromAddress))))
   }
 
   if (p.toAddress) {
