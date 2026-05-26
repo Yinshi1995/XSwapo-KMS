@@ -302,6 +302,7 @@ export async function performSweepToExchange(
           details: { amount },
         }
       }
+      let sendAmount = amount
       if (depositNativeScaled < requestedScaled + requiredGasScaled) {
         // Balance covers gas but not (amount + gas): this happens when the
         // caller passes the full deposited amount. Reduce to balance - gas.
@@ -314,16 +315,15 @@ export async function performSweepToExchange(
             details: { balance: depositBalance.balance, requiredGas, requested: amount },
           }
         }
-        const reduced = fromBigScale(reducedScaled)
-        console.log(`[sweep] Reducing send amount from ${amount} to ${reduced} to cover gas (balance=${depositBalance.balance}, gas=${requiredGas})`)
-        amount = reduced
+        sendAmount = fromBigScale(reducedScaled)
+        console.log(`[sweep] Reducing send amount from ${amount} to ${sendAmount} to cover gas (balance=${depositBalance.balance}, gas=${requiredGas})`)
       }
-      console.log(`[sweep] Sending native amount=${amount} (balance=${depositBalance.balance}, gas reserve=${requiredGas}) to ${destinationAddress}`)
+      console.log(`[sweep] Sending native amount=${sendAmount} (balance=${depositBalance.balance}, gas reserve=${requiredGas}) to ${destinationAddress}`)
       const result = await sendNative({
         chain,
         privateKey: depositPrivateKey,
         to: destinationAddress,
-        amount,
+        amount: sendAmount,
       })
       console.log(`[sweep] Native sweep sent: ${result.txId}`)
       return { status: "SWEEP_SENT", txId: result.txId, amount, destination: destinationAddress }
